@@ -3,5 +3,6 @@ name = "reco"
 version = "0.1.0"
 authors = ["Wave View Imaging"]
 edition = "2018"
+publish = false
 
 [dependencies]

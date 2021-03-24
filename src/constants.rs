@@ -16,7 +16,6 @@ const SPEED_OF_LIGHT: f64 = 299792458.;
 #[cfg(test)]
 mod test_constants {
     use super::*;
-    #[macro_use]
     use approx::*;
 
     #[test]

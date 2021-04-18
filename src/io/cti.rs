@@ -1446,4 +1446,1082 @@ mod test_cti_file {
     }
 }
 
+#[derive(Error, Debug, PartialEq)]
+pub enum CTIReaderError {
+    #[error("More data arrays than defined in header")]
+    DataArrayOverIndex,
+    #[error("Independent variable defined twice")]
+    IndependentVariableDefinedTwice,
+    #[error("Single use keyword `{0}` defined twice")]
+    SingleUseKeywordDefinedTwice(CTIKeywords),
+    #[error("Keyword `{0}` is out of order in the file")]
+    OutOfOrderKeyword(CTIKeywords),
+    #[error("Cannot open file `{0}`")]
+    CannotOpen(PathBuf),
+    #[error("Error on line {0}: {1}")]
+    LineError(usize, CTIParseError),
+}
+type CTIReaderResult<T> = std::result::Result<T, CTIReaderError>;
+
+#[cfg(test)]
+mod test_cti_reader_error {
+    use super::*;
+
+    mod test_display {
+        use super::*;
+
+        #[test]
+        fn data_array_over_index() {
+            let error = CTIReaderError::DataArrayOverIndex;
+            assert_eq!(format!("{}", error), "More data arrays than defined in header");
+        }
+
+        #[test]
+        fn independent_variable_defined_twice() {
+            let error = CTIReaderError::IndependentVariableDefinedTwice;
+            assert_eq!(format!("{}", error), "Independent variable defined twice");
+        }
+
+        #[test]
+        fn single_use_keyword_defined_twice() {
+            let error = CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::End);
+            assert_eq!(format!("{}", error), "Single use keyword `END` defined twice");
+        }
+
+        #[test]
+        fn out_of_order_keyword() {
+            let error = CTIReaderError::OutOfOrderKeyword(CTIKeywords::Begin);
+            assert_eq!(format!("{}", error), "Keyword `BEGIN` is out of order in the file");
+        }
+
+        #[test]
+        fn cannot_open() {
+            let error = CTIReaderError::CannotOpen(Path::new("/temp").to_path_buf());
+            assert_eq!(format!("{}", error), "Cannot open file `/temp`");
+        }
+
+        #[test]
+        fn line_error() {
+            let error = CTIReaderError::LineError(10, CTIParseError::BadRegex);
+            assert_eq!(format!("{}", error), "Error on line 10: Regex could not be parsed");
+        }
+    }
+}
+
+/// States in the reader FSM
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum CTIFileReaderStates {
+    Header,
+    Data,
+    VarList,
+    SeqList,
+}
+
+/// Represents state in a CTI file reader FSM
+#[derive(Debug, PartialEq)]
+struct CTIFileReaderState {
+    file: CTIFile,
+    state: CTIFileReaderStates,
+    data_array_counter: usize,
+    independent_variable_already_read: bool,
+}
+
+impl CTIFileReaderState {
+    pub fn new() -> CTIFileReaderState {
+        CTIFileReaderState {
+            file: CTIFile {
+                header: CTIHeader::blank(),
+                data: vec![],
+            },
+            state: CTIFileReaderStates::Header,
+            data_array_counter: 0,
+            independent_variable_already_read: false,
+        }
+    }
+
+    pub fn process_keyword(self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+        match self.state {
+            CTIFileReaderStates::Header => CTIFileReaderState::state_header(self, keyword),
+            CTIFileReaderStates::Data => CTIFileReaderState::state_data(self, keyword),
+            CTIFileReaderStates::VarList => CTIFileReaderState::state_var_list(self, keyword),
+            CTIFileReaderStates::SeqList => CTIFileReaderState::state_seq_list(self, keyword),
+        }
+    }
+
+    fn state_header(mut self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+        match keyword {
+            CTIKeywords::CITIFile{version} => {
+                match self.file.header.version {
+                    Some(_) => Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::CITIFile{version})),
+                    None => {
+                        self.file.header.version = Some(version);
+                        Ok(self)
+                    }
+                }
+            },
+            CTIKeywords::Name(name) => {
+                match self.file.header.name {
+                    Some(_) => Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Name(name))),
+                    None => {
+                        self.file.header.name = Some(name);
+                        Ok(self)
+                    }
+                }
+            },
+            CTIKeywords::Device{name, value} => {
+                self.file.header.devices.add(&name, &value);
+                Ok(self)
+            },
+            CTIKeywords::Comment(comment) => {
+                self.file.header.comments.push(comment);
+                Ok(self)
+            },
+            CTIKeywords::Constant{name, value} => {
+                self.file.header.constants.push(CTIConstant::new(&name, &value));
+                Ok(self)
+            },
+            CTIKeywords::Var{name, format, length} => {
+                match self.file.header.independent_variable.name {
+                    Some(_) => Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Var{name, format, length})),
+                    None => {
+                        self.file.header.independent_variable.name = Some(name);
+                        self.file.header.independent_variable.format = format;
+                        Ok(self)
+                    },
+                }
+            },
+            CTIKeywords::VarListBegin => {
+                match self.independent_variable_already_read {
+                    false => {
+                        self.state = CTIFileReaderStates::VarList;
+                        Ok(self)
+                    },
+                    true => Err(CTIReaderError::IndependentVariableDefinedTwice),
+                }
+            },
+            CTIKeywords::SegListBegin => {
+                match self.independent_variable_already_read {
+                    false => {
+                        self.state = CTIFileReaderStates::SeqList;
+                        Ok(self)
+                    },
+                    true => Err(CTIReaderError::IndependentVariableDefinedTwice),
+                }
+            },
+            CTIKeywords::Begin => {
+                self.state = CTIFileReaderStates::Data;
+                Ok(self)
+            },
+            CTIKeywords::Data{name, format} => {
+                self.file.data.push(CTIDataArray::new(&name, &format));
+                Ok(self)
+            },
+            _ => Err(CTIReaderError::OutOfOrderKeyword(keyword)),
+        }
+    }
+
+    fn state_data(mut self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+        match keyword {
+            CTIKeywords::DataPair{real, imag} => {
+                if self.data_array_counter < self.file.data.len() {
+                    self.file.data[self.data_array_counter].add_sample(real, imag);
+                    Ok(self)
+                } else {
+                    Err(CTIReaderError::DataArrayOverIndex)
+                }
+            }
+            CTIKeywords::End => {
+                self.state = CTIFileReaderStates::Header;
+                self.data_array_counter += 1;
+                Ok(self)
+            },
+            _ => Err(CTIReaderError::OutOfOrderKeyword(keyword)),
+        }
+    }
+
+    fn state_var_list(mut self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+        match keyword {
+            CTIKeywords::VarListItem(value) => {
+                self.file.header.independent_variable.push(value);
+                Ok(self)
+            },
+            CTIKeywords::VarListEnd => {
+                self.independent_variable_already_read = true;
+                self.state = CTIFileReaderStates::Header;
+                Ok(self)
+            },
+            _ => Err(CTIReaderError::OutOfOrderKeyword(keyword)),
+        }
+    }
+
+    fn state_seq_list(mut self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+        match keyword {
+            CTIKeywords::SegItem{first, last, number} => {
+                self.file.header.independent_variable.seq(first, last, number);
+                Ok(self)
+            },
+            CTIKeywords::SegListEnd => {
+                self.independent_variable_already_read = true;
+                self.state = CTIFileReaderStates::Header;
+                Ok(self)
+            },
+            _ => Err(CTIReaderError::OutOfOrderKeyword(keyword)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_cti_file_reader_state {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let expected = CTIFileReaderState{
+            file: CTIFile {
+                header: CTIHeader {
+                    version: None,
+                    name: None,
+                    comments: vec![],
+                    devices: CTIDevices {devices: vec![]},
+                    independent_variable: CTIVar {name: None, format: None, data: vec![]},
+                    constants: vec![],
+                },
+                data: vec![],
+            },
+            state: CTIFileReaderStates::Header,
+            data_array_counter: 0,
+            independent_variable_already_read: false,
+        };
+        let result = CTIFileReaderState::new();
+        assert_eq!(result, expected);
+    }
+
+    mod test_state_header {
+        use super::*;
+
+        mod test_keywords {
+            use super::*;
+
+            fn initialize_state() -> CTIFileReaderState {
+                CTIFileReaderState{
+                    state: CTIFileReaderStates::Header,
+                    .. CTIFileReaderState::new()
+                }
+            }
+
+            #[test]
+            fn citifile() {
+                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.version, Some(String::from("A.01.01")));
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn citifile_cannot_be_called_twice() {
+                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let mut state = initialize_state();
+                state.file.header.version = Some(String::from("A.01.01"));
+                assert_eq!(Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn name() {
+                let keyword = CTIKeywords::Name(String::from("Name"));
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.name, Some(String::from("Name")));
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn name_cannot_be_called_twice() {
+                let keyword = CTIKeywords::Name(String::from("CAL_SET"));
+                let mut state = initialize_state();
+                state.file.header.name = Some(String::from("CAL_SET"));
+                assert_eq!(Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Name(String::from("CAL_SET")))), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_none() {
+                let keyword = CTIKeywords::Var{name: String::from("Name"), format: None, length: 102};
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.independent_variable.name, Some(String::from("Name")));
+                        assert_eq!(s.file.header.independent_variable.format, None);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn var_some() {
+                let keyword = CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.independent_variable.name, Some(String::from("Name")));
+                        assert_eq!(s.file.header.independent_variable.format, Some(String::from("MAG")));
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn var_cannot_be_called_twice() {
+                let keyword = CTIKeywords::Var{name: String::from("FREQ"), format: None, length: 102};
+                let mut state = initialize_state();
+                state.file.header.independent_variable.name = Some(String::from("Name"));
+                assert_eq!(Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Var{name: String::from("FREQ"), format: None, length: 102})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_cannot_be_called_twice_none_format() {
+                let keyword = CTIKeywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102};
+                let mut state = initialize_state();
+                state.file.header.independent_variable.name = Some(String::from("Name"));
+                assert_eq!(Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn constant_empty() {
+                let keyword = CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.constants, vec![CTIConstant::new("Name", "Value")]);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn constant_exists() {
+                let keyword = CTIKeywords::Constant{name: String::from("New Name"), value: String::from("New Value")};
+                let mut state = initialize_state();
+                state.file.header.constants.push(CTIConstant::new("Name", "Value"));
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.constants, vec![CTIConstant::new("Name", "Value"), CTIConstant::new("New Name", "New Value")]);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn device() {
+                let keyword = CTIKeywords::Device{name: String::from("NA"), value: String::from("Value")};
+                let state = initialize_state();
+                let mut expected = CTIDevices::blank();
+                expected.add("NA", "Value");
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.devices, expected);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn device_with_existing_device() {
+                let keyword = CTIKeywords::Device{name: String::from("WVI"), value: String::from("1904")};
+                let mut state = initialize_state();
+                state.file.header.devices.add("NA", "Value");
+                let mut expected = CTIDevices::blank();
+                expected.add("NA", "Value");
+                expected.add("WVI", "1904");
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.devices, expected);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn seg_list_begin() {
+                let keyword = CTIKeywords::SegListBegin;
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => assert_eq!(s.state, CTIFileReaderStates::SeqList),
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn seg_list_begin_when_already_read() {
+                let keyword = CTIKeywords::SegListBegin;
+                let mut state = initialize_state();
+                state.independent_variable_already_read = true;
+                assert_eq!(Err(CTIReaderError::IndependentVariableDefinedTwice), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_item() {
+                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 2};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_list_end() {
+                let keyword = CTIKeywords::SegListEnd;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListEnd)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_list_begin() {
+                let keyword = CTIKeywords::VarListBegin;
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => assert_eq!(s.state, CTIFileReaderStates::VarList),
+                    Err(_) => panic!(),
+                }
+            }
+            
+            #[test]
+            fn var_list_begin_when_already_read() {
+                let keyword = CTIKeywords::VarListBegin;
+                let mut state = initialize_state();
+                state.independent_variable_already_read = true;
+                assert_eq!(Err(CTIReaderError::IndependentVariableDefinedTwice), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_list_item() {
+                let keyword = CTIKeywords::VarListItem(1.);
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListItem(1.))), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn data() {
+                let keyword = CTIKeywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.data, vec![CTIDataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}]);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn data_with_already_existing() {
+                let keyword = CTIKeywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
+                let mut state = initialize_state();
+                state.file.data.push(CTIDataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]});
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.data, vec![
+                            CTIDataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]},
+                            CTIDataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}
+                        ]);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn data_pair() {
+                let keyword = CTIKeywords::DataPair{real: 1., imag: 2.};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::DataPair{real: 1., imag: 2.})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn begin() {
+                let keyword = CTIKeywords::Begin;
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.data_array_counter, 0);
+                        assert_eq!(s.state, CTIFileReaderStates::Data);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn end() {
+                let keyword = CTIKeywords::End;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::End)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn comment() {
+                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.comments, vec![String::from("Comment")]);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn comment_with_existing() {
+                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let mut state = initialize_state();
+                state.file.header.comments.push(String::from("Comment First"));
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.comments, vec![String::from("Comment First"), String::from("Comment")]);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+        }   
+    }
+
+    mod test_state_data{
+        use super::*;
+
+        mod test_keywords {
+            use super::*;
+
+            fn initialize_state() -> CTIFileReaderState {
+                let mut state = CTIFileReaderState{
+                    state: CTIFileReaderStates::Data,
+                    .. CTIFileReaderState::new()
+                };
+                state.file.data.push(CTIDataArray::blank());
+                state
+            }
+
+            #[test]
+            fn citifile() {
+                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn name() {
+                let keyword = CTIKeywords::Name(String::from("Name"));
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Name(String::from("Name")))), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_none() {
+                let keyword = CTIKeywords::Var{name: String::from("Name"), format: None, length: 102};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_some() {
+                let keyword = CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn constant() {
+                let keyword = CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn device() {
+                let keyword = CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_list_begin() {
+                let keyword = CTIKeywords::SegListBegin;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListBegin)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_item() {
+                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 2};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_list_end() {
+                let keyword = CTIKeywords::SegListEnd;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListEnd)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_list_begin() {
+                let keyword = CTIKeywords::VarListBegin;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListBegin)), state.process_keyword(keyword));
+            }
+            
+            #[test]
+            fn var_list_item() {
+                let keyword = CTIKeywords::VarListItem(1.);
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListItem(1.))), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_list_item_exponent() {
+                let keyword = CTIKeywords::VarListItem(1e9);
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListItem(1e9))), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_list_end() {
+                let keyword = CTIKeywords::VarListEnd;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListEnd)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn data() {
+                let keyword = CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn data_pair() {
+                let keyword = CTIKeywords::DataPair{real: 1., imag: 2.};
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.data[0].real, vec![1.]);
+                        assert_eq!(s.file.data[0].imag, vec![2.]);
+                        assert_eq!(s.state, CTIFileReaderStates::Data);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn data_pair_second_array() {
+                let keyword = CTIKeywords::DataPair{real: 1., imag: 2.};
+                let mut state = initialize_state();
+                state.file.data.push(CTIDataArray::blank());
+                state.data_array_counter = 1;
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.data[0].real, vec![]);
+                        assert_eq!(s.file.data[0].imag, vec![]);
+                        assert_eq!(s.file.data[1].real, vec![1.]);
+                        assert_eq!(s.file.data[1].imag, vec![2.]);
+                        assert_eq!(s.state, CTIFileReaderStates::Data);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn data_pair_out_of_bounds() {
+                let keyword = CTIKeywords::DataPair{real: 1., imag: 2.};
+                let mut state = initialize_state();
+                state.data_array_counter = 1;
+                assert_eq!(Err(CTIReaderError::DataArrayOverIndex), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn begin() {
+                let keyword = CTIKeywords::Begin;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Begin)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn end() {
+                let keyword = CTIKeywords::End;
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.data_array_counter, 1);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn end_increment_index() {
+                let keyword = CTIKeywords::End;
+                let mut state = initialize_state();
+                state.data_array_counter = 1;
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.data_array_counter, 2);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn comment() {
+                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
+            }
+        }   
+    }
+
+    mod test_state_var_list{
+        use super::*;
+
+        mod test_keywords {
+            use super::*;
+
+            fn initialize_state() -> CTIFileReaderState {
+                CTIFileReaderState{
+                    state: CTIFileReaderStates::VarList,
+                    .. CTIFileReaderState::new()
+                }
+            }
+
+            #[test]
+            fn citifile() {
+                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn name() {
+                let keyword = CTIKeywords::Name(String::from("Name"));
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Name(String::from("Name")))), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_none() {
+                let keyword = CTIKeywords::Var{name: String::from("Name"), format: None, length: 102};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_some() {
+                let keyword = CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn constant() {
+                let keyword = CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn device() {
+                let keyword = CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_list_begin() {
+                let keyword = CTIKeywords::SegListBegin;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListBegin)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_item() {
+                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 2};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_list_end() {
+                let keyword = CTIKeywords::SegListEnd;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListEnd)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_list_begin() {
+                let keyword = CTIKeywords::VarListBegin;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListBegin)), state.process_keyword(keyword));
+            }
+            
+            #[test]
+            fn var_list_item() {
+                let keyword = CTIKeywords::VarListItem(1.);
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.independent_variable.data, vec![1.]);
+                        assert_eq!(s.state, CTIFileReaderStates::VarList);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn var_list_item_exponent() {
+                let keyword = CTIKeywords::VarListItem(1e9);
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.independent_variable.data, vec![1e9]);
+                        assert_eq!(s.state, CTIFileReaderStates::VarList);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn var_list_item_already_exists() {
+                let keyword = CTIKeywords::VarListItem(1e9);
+                let mut state = initialize_state();
+                state.file.header.independent_variable.push(1e8);
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.independent_variable.data, vec![1e8, 1e9]);
+                        assert_eq!(s.state, CTIFileReaderStates::VarList);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn var_list_end() {
+                let keyword = CTIKeywords::VarListEnd;
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.independent_variable_already_read, true);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn data() {
+                let keyword = CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn data_pair() {
+                let keyword = CTIKeywords::DataPair{real: 1., imag: 1.};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::DataPair{real: 1., imag: 1.})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn begin() {
+                let keyword = CTIKeywords::Begin;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Begin)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn end() {
+                let keyword = CTIKeywords::End;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::End)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn comment() {
+                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
+            }
+        }   
+    }
+
+    mod test_state_seq_list{
+        use super::*;
+
+        mod test_keywords {
+            use super::*;
+
+            fn initialize_state() -> CTIFileReaderState {
+                CTIFileReaderState{
+                    state: CTIFileReaderStates::SeqList,
+                    .. CTIFileReaderState::new()
+                }
+            }
+
+            #[test]
+            fn citifile() {
+                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn name() {
+                let keyword = CTIKeywords::Name(String::from("Name"));
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Name(String::from("Name")))), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_none() {
+                let keyword = CTIKeywords::Var{name: String::from("Name"), format: None, length: 102};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_some() {
+                let keyword = CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn constant() {
+                let keyword = CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn device() {
+                let keyword = CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_list_begin() {
+                let keyword = CTIKeywords::SegListBegin;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListBegin)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn seg_item() {
+                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 2};
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.independent_variable.data, vec![10., 100.]);
+                        assert_eq!(s.state, CTIFileReaderStates::SeqList);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn seg_item_triple() {
+                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 3};
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.file.header.independent_variable.data, vec![10., 55., 100.]);
+                        assert_eq!(s.state, CTIFileReaderStates::SeqList);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn seg_list_end() {
+                let keyword = CTIKeywords::SegListEnd;
+                let state = initialize_state();
+                match state.process_keyword(keyword) {
+                    Ok(s) => {
+                        assert_eq!(s.independent_variable_already_read, true);
+                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                    },
+                    Err(_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn var_list_begin() {
+                let keyword = CTIKeywords::VarListBegin;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListBegin)), state.process_keyword(keyword));
+            }
+            
+            #[test]
+            fn var_list_item() {
+                let keyword = CTIKeywords::VarListItem(1.);
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListItem(1.))), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn var_list_end() {
+                let keyword = CTIKeywords::VarListEnd;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListEnd)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn data() {
+                let keyword = CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn data_pair() {
+                let keyword = CTIKeywords::DataPair{real: 1., imag: 1.};
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::DataPair{real: 1., imag: 1.})), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn begin() {
+                let keyword = CTIKeywords::Begin;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Begin)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn end() {
+                let keyword = CTIKeywords::End;
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::End)), state.process_keyword(keyword));
+            }
+
+            #[test]
+            fn comment() {
+                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let state = initialize_state();
+                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
+            }
+        }   
+    }
 }

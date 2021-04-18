@@ -1,3 +1,39 @@
+//! Input/Output for CTI files
+//! 
+//! <p><a href="http://literature.cdn.keysight.com/litweb/pdf/ads15/cktsim/ck2016.html#:~:text=CITIfile%20stands%20for%20Common%20Instrumentation,it%20can%20meet%20future%20needs">The standard</a>, defines the following entities:</p>
+//! 
+//! | Name     | Description                     |
+//! |----------|---------------------------------|
+//! | Package  | The entire contents of the file |
+//! | Header   | Header of the file              |
+//! | Data     | One or more data arrays         |
+//! | Keywords | Define the header contents      |
+//! 
+//! As this is a custom ASCII file type, the standard is not as simple as one would like.
+//! The standard is followed as closely as is reasonable. The largest changes are in the
+//! extension of the keywords.
+//! 
+//! ## Non-Standard Type
+//! 
+//! A non-standard but industry prevelent comment section is added formated with a bang:
+//! 
+//! ```.no_test
+//! !COMMENT
+//! ```
+//! 
+//! These are used to provide internal comments.
+//! 
+//! ## Input-Output consistency:
+//! 
+//! General input-output consistency cannot be guaranteed with CTI files because of their design.
+//! That is, if a file is read in and read out, the byte representation of the file may change,
+//! exact floating point representations may change, but the file will contain the same information.
+//! The following is not guaranteed:
+//! 
+//! - ASCII representation of floating points may change because of the String -> Float -> String conversion.
+//! - Floats may be shifted in exponential format.
+//! - All `SEG_LIST` keywords will be converted to `VAR_LIST`
+
 use lazy_static::lazy_static;
 use regex::Regex;
 

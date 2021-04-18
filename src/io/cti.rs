@@ -1272,3 +1272,85 @@ mod test_cti_header {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct CTIDataArray {
+    pub name: Option<String>,
+    pub format: Option<String>,
+    pub real: Vec<f64>,
+    pub imag: Vec<f64>,
+}
+
+impl CTIDataArray {
+    #[cfg(test)]
+    fn blank() -> CTIDataArray {
+        CTIDataArray {
+            name: None,
+            format: None,
+            real: vec![],
+            imag: vec![],
+        }
+    }
+
+    pub fn new(name: &str, format: &str) -> CTIDataArray {
+        CTIDataArray {
+            name: Some(String::from(name)),
+            format: Some(String::from(format)),
+            real: vec![],
+            imag: vec![],
+        }
+    }
+
+    pub fn add_sample(&mut self, real: f64, imag: f64) {
+        self.real.push(real);
+        self.imag.push(imag);
+    }
+}
+
+#[cfg(test)]
+mod test_cti_data_array {
+    use super::*;
+
+    #[test]
+    fn test_blank() {
+        let expected = CTIDataArray {name: None, format: None, real: vec![], imag: vec![]};
+        let result = CTIDataArray::blank();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_new() {
+        let expected = CTIDataArray {name: Some(String::from("S")), format: Some(String::from("RI")), real: vec![], imag: vec![]};
+        let result = CTIDataArray::new("S", "RI");
+        assert_eq!(result, expected);
+    }
+
+    #[cfg(test)]
+    mod test_add_sample {
+        use super::*;
+
+        #[test]
+        fn empty() {
+            let mut result = CTIDataArray {name: None, format: None, real: vec![], imag: vec![]};
+            result.add_sample(1., 2.);
+            assert_eq!(result.real, vec![1.]);
+            assert_eq!(result.imag, vec![2.]);
+        }
+
+        #[test]
+        fn double() {
+            let mut result = CTIDataArray {name: None, format: None, real: vec![], imag: vec![]};
+            result.add_sample(1., 2.);
+            result.add_sample(-1., -2.);
+            assert_eq!(result.real, vec![1., -1.]);
+            assert_eq!(result.imag, vec![2., -2.]);
+        }
+
+        #[test]
+        fn existing() {
+            let mut result = CTIDataArray {name: None, format: None, real: vec![1.], imag: vec![2.]};
+            result.add_sample(3., 4.);
+            assert_eq!(result.real, vec![1., 3.]);
+            assert_eq!(result.imag, vec![2., 4.]);
+        }
+    }
+}

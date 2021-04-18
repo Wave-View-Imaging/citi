@@ -1370,6 +1370,67 @@ impl Default for CTIFile {
     }
 }
 
+#[derive(Error, Debug, PartialEq)]
+pub enum CTIValidFileError {
+    #[error("Version is not defined")]
+    NoVersion,
+    #[error("Name is not defined")]
+    NoName,
+    #[error("Indepent variable is not defined")]
+    NoIndependentVariable,
+    #[error("Data name and format is not defined")]
+    NoData,
+    #[error("Independent variable and data array {2} are different lengths ({0} != {1})")]
+    VarAndDataDifferentLengths(usize, usize, usize),
+    #[error("Data array {2} has different length real and imaginary components ({0} != {1})")]
+    RealImagDoNotMatch(usize, usize, usize),
+}
+type CTIValidFileResult<T> = std::result::Result<T, CTIValidFileError>;
+
+#[cfg(test)]
+mod test_cti_valid_file_error {
+    use super::*;
+
+    mod test_display {
+        use super::*;
+
+        #[test]
+        fn no_version() {
+            let error = CTIValidFileError::NoVersion;
+            assert_eq!(format!("{}", error), "Version is not defined");
+        }
+
+        #[test]
+        fn no_name() {
+            let error = CTIValidFileError::NoName;
+            assert_eq!(format!("{}", error), "Name is not defined");
+        }
+
+        #[test]
+        fn no_independent_variable() {
+            let error = CTIValidFileError::NoIndependentVariable;
+            assert_eq!(format!("{}", error), "Indepent variable is not defined");
+        }
+
+        #[test]
+        fn no_data() {
+            let error = CTIValidFileError::NoData;
+            assert_eq!(format!("{}", error), "Data name and format is not defined");
+        }
+
+        #[test]
+        fn var_and_data() {
+            let error = CTIValidFileError::VarAndDataDifferentLengths(1, 2, 3);
+            assert_eq!(format!("{}", error), "Independent variable and data array 3 are different lengths (1 != 2)");
+        }
+
+        #[test]
+        fn data_real_imag_do_not_match() {
+            let error = CTIValidFileError::RealImagDoNotMatch(1, 2, 0);
+            assert_eq!(format!("{}", error), "Data array 0 has different length real and imaginary components (1 != 2)");
+        }
+    }
+}
 
 impl CTIFile {
     pub fn new(version: &str, name: &str) -> CTIFile {
@@ -1387,12 +1448,346 @@ impl CTIFile {
         }
     }
 
+    pub fn validate_file(self) -> CTIValidFileResult<Self> {
+        self.has_name()?
+            .has_version()?
+            .has_var()?
+            .has_data()?
+            .var_and_data_same_length()?
+            .data_real_image_same_length()
+    }
+
+    fn has_version(self) -> CTIValidFileResult<Self> {
+        match self.header.version {
+            Some(_) => Ok(self),
+            None => Err(CTIValidFileError::NoVersion),
+        }
+    }
+
+    fn has_name(self) -> CTIValidFileResult<Self> {
+        match self.header.name {
+            Some(_) => Ok(self),
+            None => Err(CTIValidFileError::NoName),
+        }
+    }
+
+    fn has_var(self) -> CTIValidFileResult<Self> {
+        match self.header.independent_variable.name {
+            Some(_) => Ok(self),
+            None => Err(CTIValidFileError::NoIndependentVariable),
+        }
+    }
+
+    fn has_data(self) -> CTIValidFileResult<Self> {
+        match self.data.len() {
+            0 => Err(CTIValidFileError::NoData),
+            _ => Ok(self),
+        }
+    }
+
+    /// Zero length var with variable length data allowed
+    fn var_and_data_same_length(self) -> CTIValidFileResult<Self> {
+        let mut n = self.header.independent_variable.data.len();
+
+        for (i, data_array) in self.data.iter().enumerate() {
+            let k = data_array.real.len();
+            if n == 0 {
+                n = k
+            } else {
+                if n != k {
+                    return Err(CTIValidFileError::VarAndDataDifferentLengths(n, k, i))
+                }
+            }
+        }
+        Ok(self)
+    }
+
+    fn data_real_image_same_length(self) -> CTIValidFileResult<Self> {
+        for (i, data_array) in self.data.iter().enumerate() {
+            let real_size = data_array.real.len();
+            let imag_size = data_array.imag.len();
+
+            if real_size != imag_size {
+                return Err(CTIValidFileError::RealImagDoNotMatch(real_size, imag_size, i));
+            }
+        }
+        Ok(self)
+    }
 }
 
 #[cfg(test)]
 mod test_cti_file {
     use super::*;
 
+
+    #[cfg(test)]
+    mod test_validate_file {
+        use super::*;
+
+        fn create_valid_file() -> CTIFile {
+            let mut file = CTIFile::blank();
+            file.header.name = Some(String::from("CAL_SET"));
+            file.header.version = Some(String::from("A.01.00"));
+            file.data.push(CTIDataArray::new("E", "RI"));
+            file.header.independent_variable.name = Some(String::from("FREQ"));
+            file
+        }
+
+        #[test]
+        fn test_valid_file() {
+            let file = create_valid_file();
+            assert_eq!(Ok(create_valid_file()), file.validate_file());
+        }
+
+        #[test]
+        fn test_no_data() {
+            let mut file = create_valid_file();
+            file.data = vec![];
+            assert_eq!(Err(CTIValidFileError::NoData), file.validate_file());
+        }
+
+        #[test]
+        fn test_no_version() {
+            let mut file = create_valid_file();
+            file.header.version = None;
+            assert_eq!(Err(CTIValidFileError::NoVersion), file.validate_file());
+        }
+
+        #[test]
+        fn test_no_name() {
+            let mut file = create_valid_file();
+            file.header.name = None;
+            assert_eq!(Err(CTIValidFileError::NoName), file.validate_file());
+        }
+
+        #[test]
+        fn test_no_var() {
+            let mut file = create_valid_file();
+            file.header.independent_variable.name = None;
+            assert_eq!(Err(CTIValidFileError::NoIndependentVariable), file.validate_file());
+        }
+
+        #[test]
+        fn test_var_and_data_different() {
+            let mut file = create_valid_file();
+            file.header.independent_variable.data = vec![1.];
+            assert_eq!(Err(CTIValidFileError::VarAndDataDifferentLengths(1, 0, 0)), file.validate_file());
+        }
+
+        #[test]
+        fn test_real_imag_do_not_match() {
+            let mut file = create_valid_file();
+            file.data[0] = CTIDataArray{
+                name: None,
+                format: None,
+                real: vec![1., 2., 3.],
+                imag: vec![1., 2., 3., 4.],
+            };
+            file.header.independent_variable.data = vec![1., 2., 3.];
+            assert_eq!(Err(CTIValidFileError::RealImagDoNotMatch(3, 4, 0)), file.validate_file());
+        }
+
+        #[cfg(test)]
+        mod test_has_data {
+            use super::*;
+
+            #[test]
+            fn fail_on_no_version() {
+                let file = CTIFile::blank();
+                assert_eq!(Err(CTIValidFileError::NoData), file.has_data());
+            }
+
+            #[test]
+            fn pass_on_name() {
+                let mut expected = CTIFile::blank();
+                expected.data.push(CTIDataArray::new("E", "RI"));
+                let mut file = CTIFile::blank();
+                file.data.push(CTIDataArray::new("E", "RI"));
+                assert_eq!(Ok(expected), file.has_data());
+            }
+        }
+
+        #[cfg(test)]
+        mod test_has_var {
+            use super::*;
+
+            #[test]
+            fn fail_on_no_version() {
+                let file = CTIFile::blank();
+                assert_eq!(Err(CTIValidFileError::NoIndependentVariable), file.has_var());
+            }
+
+            #[test]
+            fn pass_on_name() {
+                let mut expected = CTIFile::blank();
+                expected.header.independent_variable.name = Some(String::from("FREQ"));
+                let mut file = CTIFile::blank();
+                file.header.independent_variable.name = Some(String::from("FREQ"));
+                assert_eq!(Ok(expected), file.has_var());
+            }
+        }
+
+        #[cfg(test)]
+        mod test_has_version {
+            use super::*;
+
+            #[test]
+            fn fail_on_no_version() {
+                let file = CTIFile::blank();
+                assert_eq!(Err(CTIValidFileError::NoVersion), file.has_version());
+            }
+
+            #[test]
+            fn pass_on_name() {
+                let mut expected = CTIFile::blank();
+                expected.header.version = Some(String::from("A.01.00"));
+                let mut file = CTIFile::blank();
+                file.header.version = Some(String::from("A.01.00"));
+                assert_eq!(Ok(expected), file.has_version());
+            }
+        }
+
+        #[cfg(test)]
+        mod test_has_name {
+            use super::*;
+
+            #[test]
+            fn fail_on_no_name() {
+                let file = CTIFile::blank();
+                assert_eq!(Err(CTIValidFileError::NoName), file.has_name());
+            }
+
+            #[test]
+            fn pass_on_name() {
+                let mut expected = CTIFile::blank();
+                expected.header.name = Some(String::from("CAL_SET"));
+                let mut file = CTIFile::blank();
+                file.header.name = Some(String::from("CAL_SET"));
+                assert_eq!(Ok(expected), file.has_name());
+            }
+        }
+
+        #[cfg(test)]
+        mod test_var_data_different_lengths {
+            use super::*;
+
+            #[test]
+            fn pass_on_blank() {
+                let file = CTIFile::blank();
+                assert_eq!(Ok(CTIFile::blank()), file.var_and_data_same_length());
+            }
+
+            #[test]
+            fn pass_on_equal() {
+                let mut file = CTIFile::blank();
+                file.data.push(CTIDataArray{
+                    name: None,
+                    format: None,
+                    real: vec![1.],
+                    imag: vec![1.],
+                });
+                file.header.independent_variable.data = vec![1.];
+                assert_eq!(Ok(file.clone()), file.var_and_data_same_length());
+            }
+
+            #[test]
+            fn pass_on_var_zero_data_some() {
+                let mut file = CTIFile::blank();
+                file.data.push(CTIDataArray{
+                    name: None,
+                    format: None,
+                    real: vec![1., 2.],
+                    imag: vec![1., 2.],
+                });
+                assert_eq!(Ok(file.clone()), file.var_and_data_same_length());
+            }
+
+            #[test]
+            fn fail_on_var_one_data_some() {
+                let mut file = CTIFile::blank();
+                file.data.push(CTIDataArray{
+                    name: None,
+                    format: None,
+                    real: vec![1., 2.],
+                    imag: vec![1., 2.],
+                });
+                file.header.independent_variable.data = vec![1.];
+                assert_eq!(Err(CTIValidFileError::VarAndDataDifferentLengths(1, 2, 0)), file.var_and_data_same_length());
+            }
+
+            #[test]
+            fn error_formatted_correctely() {
+                let mut file = CTIFile::blank();
+                file.data.push(CTIDataArray{
+                    name: None,
+                    format: None,
+                    real: vec![1.],
+                    imag: vec![1.],
+                });
+                file.data.push(CTIDataArray{
+                    name: None,
+                    format: None,
+                    real: vec![1., 2.],
+                    imag: vec![1., 2.],
+                });
+                file.header.independent_variable.data = vec![1.];
+                assert_eq!(Err(CTIValidFileError::VarAndDataDifferentLengths(1, 2, 1)), file.var_and_data_same_length());
+            }
+        }
+
+        #[cfg(test)]
+        mod test_data_real_image_same_length {
+            use super::*;
+
+            #[test]
+            fn fail_on_different_double_array() {
+                let mut file = CTIFile::blank();
+                file.data.push(CTIDataArray{
+                    name: None,
+                    format: None,
+                    real: vec![],
+                    imag: vec![],
+                });
+                file.data.push(CTIDataArray{
+                    name: None,
+                    format: None,
+                    real: vec![1., 2., 3.],
+                    imag: vec![1., 2.],
+                });
+                assert_eq!(Err(CTIValidFileError::RealImagDoNotMatch(3, 2, 1)), file.data_real_image_same_length());
+            }
+
+            #[test]
+            fn fail_on_different() {
+                let mut file = CTIFile::blank();
+                file.data.push(CTIDataArray{
+                    name: None,
+                    format: None,
+                    real: vec![1., 2., 3.],
+                    imag: vec![1., 2.],
+                });
+                assert_eq!(Err(CTIValidFileError::RealImagDoNotMatch(3, 2, 0)), file.data_real_image_same_length());
+            }
+
+            #[test]
+            fn pass_on_empty() {
+                let file = CTIFile::blank();
+                assert_eq!(Ok(file.clone()), file.data_real_image_same_length());
+            }
+
+            #[test]
+            fn pass_on_equal() {
+                let mut file = CTIFile::blank();
+                file.data.push(CTIDataArray{
+                    name: None,
+                    format: None,
+                    real: vec![1., 2.],
+                    imag: vec![1., 2.],
+                });
+                assert_eq!(Ok(file.clone()), file.data_real_image_same_length());
+            }
+        }
+    }
 
     #[test]
     fn test_default() {

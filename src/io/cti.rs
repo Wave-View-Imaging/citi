@@ -1162,3 +1162,33 @@ mod test_cti_var {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct CTIConstant {
+    pub name: String,
+    pub value: String,
+}
+
+impl CTIConstant {
+    pub fn new(name: &str, value: &str) -> CTIConstant {
+        CTIConstant {
+            name: String::from(name),
+            value: String::from(value),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_cti_constant {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let expected = CTIConstant {
+            name: String::from("A_NAME"),
+            value: String::from("A_VALUE"),
+        };
+        let result = CTIConstant::new("A_NAME", "A_VALUE");
+        assert_eq!(result, expected);
+    }
+}
+

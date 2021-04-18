@@ -852,3 +852,187 @@ mod test_cti_keywords {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct CTIDevice {
+    pub name: String,
+    pub entries: Vec<String>,
+}
+
+impl CTIDevice {
+    pub fn new(name: &str) -> CTIDevice {
+        CTIDevice {
+            name: String::from(name),
+            entries: vec![],
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_cti_device {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let result = CTIDevice::new("A Name");
+        let expected = CTIDevice {name: String::from("A Name"), entries: vec![]};
+        assert_eq!(result, expected);
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CTIDevices {
+    pub devices: Vec<CTIDevice>,
+}
+
+impl CTIDevices {
+    fn blank() -> CTIDevices {
+        CTIDevices {
+            devices: vec![],
+        }
+    }
+
+    pub fn add(&mut self, device_name: &str, value: &str) {
+        self.create_device(device_name);
+        match self.device_index(device_name) {
+            Some(i) => self.devices[i].entries.push(String::from(value)),
+            None => (), // Never occurs
+        }
+    }
+
+    /// If the device already exists, nothing happens
+    pub fn create_device(&mut self, device_name: &str) {
+        if self.get_device(device_name) == None {
+            self.devices.push(CTIDevice::new(device_name));
+        }
+    }
+
+    pub fn get_device(&self, device_name: &str) -> Option<&CTIDevice> {
+        self.devices.iter().find(|&x| x.name == device_name)
+    }
+
+    pub fn device_index(&self, device_name: &str) -> Option<usize> {
+        self.devices.iter().position(|x| x.name == device_name)
+    }
+}
+
+#[cfg(test)]
+mod test_cti_devices {
+    use super::*;
+
+    #[test]
+    fn test_blank() {
+        let result = CTIDevices::blank();
+        let expected = CTIDevices {devices:  vec![]};
+        assert_eq!(result, expected);
+    }
+
+    #[cfg(test)]
+    mod test_add {
+        use super::*;
+
+        #[test]
+        fn empty() {
+            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]}]};
+            let mut devices = CTIDevices{devices: vec![]};
+            devices.add("NA", "VERSION HP8510B.05.00");
+            assert_eq!(devices, expected);
+        }
+
+        #[test]
+        fn double_add() {
+            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00"), String::from("REGISTER 1")]}]};
+            let mut devices = CTIDevices{devices: vec![]};
+            devices.add("NA", "VERSION HP8510B.05.00");
+            devices.add("NA", "REGISTER 1");
+            assert_eq!(devices, expected);
+        }
+
+        #[test]
+        fn add_two_devices() {
+            let expected = CTIDevices{devices: vec![
+                CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]},
+                CTIDevice{name: String::from("WVI"), entries: vec![String::from("REGISTER 1")]},
+            ]};
+            let mut devices = CTIDevices{devices: vec![]};
+            devices.add("NA", "VERSION HP8510B.05.00");
+            devices.add("WVI", "REGISTER 1");
+            assert_eq!(devices, expected);
+        }
+    }
+
+    #[cfg(test)]
+    mod test_create_device {
+        use super::*;
+
+        #[test]
+        fn empty() {
+            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
+            let mut devices = CTIDevices{devices: vec![]};
+            devices.create_device("A Name");
+            assert_eq!(devices, expected);
+        }
+
+        #[test]
+        fn appends_device() {
+            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("Different Name"), entries: vec![]}, CTIDevice{name: String::from("A Name"), entries: vec![]}]};
+            let mut devices = CTIDevices{devices: vec![CTIDevice{name: String::from("Different Name"), entries: vec![]}]};
+            devices.create_device("A Name");
+            assert_eq!(devices, expected);
+        }
+
+        #[test]
+        fn existing_device() {
+            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
+            let mut devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
+            devices.create_device("A Name");
+            assert_eq!(devices, expected);
+        }
+    }
+
+    #[cfg(test)]
+    mod test_device_index {
+        use super::*;
+
+        #[test]
+        fn empty() {
+            let devices = CTIDevices{devices: vec![]};
+            assert_eq!(devices.device_index(""), None);
+        }
+
+        #[test]
+        fn no_device_found() {
+            let devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
+            assert_eq!(devices.device_index(""), None);
+        }
+
+        #[test]
+        fn device_found() {
+            let devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
+            assert_eq!(devices.device_index("A Name"), Some(0));
+        }
+    }
+
+    #[cfg(test)]
+    mod test_get_device {
+        use super::*;
+
+        #[test]
+        fn empty() {
+            let devices = CTIDevices{devices: vec![]};
+            assert_eq!(devices.get_device(""), None);
+        }
+
+        #[test]
+        fn no_device_found() {
+            let devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
+            assert_eq!(devices.get_device(""), None);
+        }
+
+        #[test]
+        fn device_found() {
+            let devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
+            assert_eq!(devices.get_device("A Name"), Some(&CTIDevice{name: String::from("A Name"), entries: vec![]}));
+        }
+    }
+}
+

@@ -1036,3 +1036,129 @@ mod test_cti_devices {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct CTIVar {
+    pub name: Option<String>,
+    pub format: Option<String>,
+    pub data: Vec<f64>,
+}
+
+impl CTIVar {
+    fn blank() -> CTIVar {
+        CTIVar {
+            name: None,
+            format: None,
+            data: vec![],
+        }
+    }
+
+    pub fn new(name: &str, format: Option<String>) -> CTIVar {
+        CTIVar {
+            name: Some(String::from(name)),
+            format: format,
+            data: vec![],
+        }
+    }
+
+    pub fn push(&mut self, value: f64) {
+        self.data.push(value);
+    }
+
+    pub fn seq(&mut self, first: f64, last: f64, number: usize) {
+        match number {
+            0 => (),
+            1 => self.push(first),
+            _ => {
+                let delta = (last - first) / ((number-1) as f64);
+                for i in 0..number {
+                    self.push(first + (i as f64)*delta);
+                }
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_cti_var {
+    use super::*;
+
+    #[test]
+    fn test_blank() {
+        let result = CTIVar::blank();
+        let expected = CTIVar {name: None, format: None, data: vec![]};
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_new() {
+        let result = CTIVar::new("Name", None);
+        let expected = CTIVar {name: Some(String::from("Name")), format: None, data: vec![]};
+        assert_eq!(result, expected);
+    }
+
+    mod test_push {
+        use super::*;
+
+        #[test]
+        fn empty() {
+            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            var.push(1.);
+            assert_eq!(vec![1.], var.data);
+        }
+
+        #[test]
+        fn double() {
+            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            var.push(1.);
+            var.push(2.);
+            assert_eq!(vec![1., 2.], var.data);
+        }
+
+        #[test]
+        fn existing() {
+            let mut var = CTIVar {name: None, format: None, data: vec![1.]};
+            var.push(2.);
+            assert_eq!(vec![1., 2.], var.data);
+        }
+    }
+
+    mod test_seq {
+        use super::*;
+
+        #[test]
+        fn number_zero() {
+            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            var.seq(1., 2., 0);
+            assert_eq!(Vec::<f64>::new(), var.data);
+        }
+
+        #[test]
+        fn number_one() {
+            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            var.seq(10., 20., 1);
+            assert_eq!(vec![10.], var.data);
+        }
+
+        #[test]
+        fn simple() {
+            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            var.seq(1., 2., 2);
+            assert_eq!(vec![1., 2.], var.data);
+        }
+
+        #[test]
+        fn triple() {
+            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            var.seq(2000000000., 3000000000., 3);
+            assert_eq!(vec![2000000000., 2500000000., 3000000000.], var.data);
+        }
+
+        #[test]
+        fn reversed() {
+            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            var.seq(3000000000., 2000000000., 3);
+            assert_eq!(vec![3000000000., 2500000000., 2000000000.], var.data);
+        }
+    }
+}
+

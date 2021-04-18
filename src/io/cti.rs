@@ -1,9 +1,96 @@
 use lazy_static::lazy_static;
 use regex::Regex;
+
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::fmt;
+use std::path::{Path,PathBuf};
+
 use thiserror::Error;
+
+#[derive(Error, Debug, PartialEq)]
+pub enum CTIError {
+    #[error("Parsing error: `{0}`")]
+    CTIParseError(CTIParseError),
+    #[error("Reading error: `{0}`")]
+    CTIReaderError(CTIReaderError),
+    #[error("Invalid file error: `{0}`")]
+    CTIValidFileError(CTIValidFileError),
+}
+pub type CTIResult<T> = std::result::Result<T, CTIError>;
+
+impl From<CTIParseError> for CTIError {
+    fn from(error: CTIParseError) -> Self {
+        CTIError::CTIParseError(error)
+    }
+}
+
+impl From<CTIReaderError> for CTIError {
+    fn from(error: CTIReaderError) -> Self {
+        CTIError::CTIReaderError(error)
+    }
+}
+
+impl From<CTIValidFileError> for CTIError {
+    fn from(error: CTIValidFileError) -> Self {
+        CTIError::CTIValidFileError(error)
+    }
+}
+
+#[cfg(test)]
+mod test_cti_error {
+    use super::*;
+
+    mod test_display {
+        use super::*;
+
+        #[test]
+        fn parse_error() {
+            let error = CTIError::CTIParseError(CTIParseError::BadRegex);
+            assert_eq!(format!("{}", error), "Parsing error: `Regex could not be parsed`");
+        }
+
+        #[test]
+        fn reader_error() {
+            let error = CTIError::CTIReaderError(CTIReaderError::DataArrayOverIndex);
+            assert_eq!(format!("{}", error), "Reading error: `More data arrays than defined in header`");
+        }
+
+        #[test]
+        fn valid_file_error() {
+            let error = CTIError::CTIValidFileError(CTIValidFileError::NoVersion);
+            assert_eq!(format!("{}", error), "Invalid file error: `Version is not defined`");
+        }
+    }
+
+    mod from_error {
+        use super::*;
+
+        #[test]
+        fn from_cti_parse_error() {
+            let expected = CTIError::CTIParseError(CTIParseError::BadRegex);
+            let input_error = CTIParseError::BadRegex;
+            let result = CTIError::from(input_error);
+            assert_eq!(result, expected);
+        }
+
+        #[test]
+        fn from_cti_reader_error() {
+            let expected = CTIError::CTIReaderError(CTIReaderError::DataArrayOverIndex);
+            let input_error = CTIReaderError::DataArrayOverIndex;
+            let result = CTIError::from(input_error);
+            assert_eq!(result, expected);
+        }
+
+        #[test]
+        fn from_cti_valid_file_error() {
+            let expected = CTIError::CTIValidFileError(CTIValidFileError::NoName);
+            let input_error = CTIValidFileError::NoName;
+            let result = CTIError::from(input_error);
+            assert_eq!(result, expected);
+        }
+    }
+}
 
 #[derive(Error, Debug, PartialEq)]
 pub enum CTIParseError {
@@ -1440,6 +1527,23 @@ impl CTIFile {
         }
     }
 
+    pub fn read<P: AsRef<Path>>(path: &P)  -> CTIResult<CTIFile> {
+        let contents = std::fs::read_to_string(path).map_err(|_| CTIReaderError::CannotOpen(path.as_ref().to_path_buf()))?;
+        CTIFile::read_str(&contents)
+    }
+
+    fn read_str(contents: &str) -> CTIResult<CTIFile> {
+        let mut state = CTIFileReaderState::new();
+        for (i, line) in contents.lines().enumerate() {
+            // Filter out new lines
+            if line.len() > 0 {
+                let keyword = CTIKeywords::try_from(line).map_err(|e| CTIReaderError::LineError(i, e))?;
+                state = state.process_keyword(keyword)?;
+            }
+        }
+        Ok(state.file.validate_file()?)
+    }
+
     #[cfg(test)]
     fn blank() -> CTIFile {
         CTIFile {
@@ -1519,6 +1623,110 @@ impl CTIFile {
 mod test_cti_file {
     use super::*;
 
+    #[cfg(test)]
+    mod test_read {
+        use super::*;
+        use approx::*;
+
+        #[test]
+        fn cannot_read_empty_file() {
+            let expected = Err(CTIError::CTIValidFileError(CTIValidFileError::NoName));
+            let contents = "";
+            let result = CTIFile::read_str(contents);
+            assert_eq!(expected, result);
+        }
+
+        #[test]
+        fn succeed_on_multiple_new_lines() {
+            let contents = "CITIFILE A.01.00\nNAME MEMORY\n\n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
+            match CTIFile::read_str(contents) {
+                Ok(_) => (),
+                Err(_) => panic!("Cannot parse when there are multiple blank lines"),
+            }
+        }
+
+        #[cfg(test)]
+        mod test_read_minimal_file {
+            use super::*;
+
+            fn setup() -> CTIResult<CTIFile> {
+                let contents = "CITIFILE A.01.00\nNAME MEMORY\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
+                CTIFile::read_str(contents)
+            }
+
+            #[test]
+            fn name() {
+                match setup() {
+                    Ok(file) => assert_eq!(file.header.name, Some(String::from("MEMORY"))),
+                    Err(_) => panic!("File could not be read"),
+                }
+            }
+
+            #[test]
+            fn version() {
+                match setup() {
+                    Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.00"))),
+                    Err(_) => panic!("File could not be read"),
+                }
+            }
+
+            #[test]
+            fn comments() {
+                match setup() {
+                    Ok(file) => assert_eq!(file.header.comments.len(), 0),
+                    Err(_) => panic!("File could not be read"),
+                }
+            }
+
+            #[test]
+            fn constants() {
+                match setup() {
+                    Ok(file) => assert_eq!(file.header.constants.len(), 0),
+                    Err(_) => panic!("File could not be read"),
+                }
+            }
+
+            #[test]
+            fn devices() {
+                match setup() {
+                    Ok(file) => assert_eq!(file.header.devices.devices.len(), 0),
+                    Err(_) => panic!("File could not be read"),
+                }
+            }
+
+            #[test]
+            fn independent_variable() {
+                match setup() {
+                    Ok(file) => {
+                        assert_eq!(file.header.independent_variable.name, Some(String::from("FREQ")));
+                        assert_eq!(file.header.independent_variable.format, Some(String::from("MAG")));
+                        assert_eq!(file.header.independent_variable.data.len(), 0);
+                    },
+                    Err(_) => panic!("File could not be read"),
+                }
+            }
+
+            #[test]
+            fn data() {
+                match setup() {
+                    Ok(file) => {
+                        assert_eq!(file.data.len(), 1);
+                        assert_eq!(file.data[0].name, Some(String::from("S")));
+                        assert_eq!(file.data[0].format, Some(String::from("RI")));
+                        assert_eq!(file.data[0].real.len(), 3);
+                        assert_eq!(file.data[0].imag.len(), 3);
+                        assert_relative_eq!(file.data[0].real[0], -0.0354545);
+                        assert_relative_eq!(file.data[0].real[1], 0.00023491);
+                        assert_relative_eq!(file.data[0].real[2], 0.00200382);
+                        assert_relative_eq!(file.data[0].imag[0], -0.00138601);
+                        assert_relative_eq!(file.data[0].imag[1], -0.00139883);
+                        assert_relative_eq!(file.data[0].imag[2], -0.00140022);
+                    },
+                    Err(_) => panic!("File could not be read"),
+                }
+            }
+        }
+    }
 
     #[cfg(test)]
     mod test_validate_file {

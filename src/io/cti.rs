@@ -1192,3 +1192,83 @@ mod test_cti_constant {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct CTIHeader {
+    pub version: Option<String>,
+    pub name: Option<String>,
+    pub comments: Vec<String>,
+    pub devices: CTIDevices,
+    pub independent_variable: CTIVar,
+    pub constants: Vec<CTIConstant>,
+}
+
+impl Default for CTIHeader {
+    fn default() -> Self {
+        CTIHeader {
+            version: Some(String::from("A.01.00")),
+            name: Some(String::from("Name")),
+            comments: vec![],
+            devices: CTIDevices::blank(),
+            independent_variable: CTIVar::blank(),
+            constants: vec![],
+        }
+    }
+}
+
+impl CTIHeader {
+    pub fn new(version: &str, name: &str) -> CTIHeader {
+        CTIHeader {
+            version: Some(String::from(version)),
+            name: Some(String::from(name)),
+            comments: vec![],
+            devices: CTIDevices::blank(),
+            independent_variable: CTIVar::blank(),
+            constants: vec![],
+        }
+    }
+
+    fn blank() -> CTIHeader {
+        CTIHeader {
+            version: None,
+            name: None,
+            comments: vec![],
+            devices: CTIDevices::blank(),
+            independent_variable: CTIVar::blank(),
+            constants: vec![],
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_cti_header {
+    use super::*;
+
+    #[test]
+    fn test_default() {
+        let expected = CTIHeader {
+            version: Some(String::from("A.01.00")),
+            name: Some(String::from("Name")),
+            comments: vec![],
+            devices: CTIDevices {devices: vec![]},
+            independent_variable: CTIVar {name: None, format: None, data: vec![]},
+            constants: vec![],
+        };
+        let result = CTIHeader::default();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_new() {
+        let expected = CTIHeader {
+            version: Some(String::from("A.01.01")),
+            name: Some(String::from("A_NAME")),
+            comments: vec![],
+            devices: CTIDevices::blank(),
+            independent_variable: CTIVar {name: None, format: None, data: vec![]},
+            constants: vec![],
+        };
+        let result = CTIHeader::new("A.01.01", "A_NAME");
+        assert_eq!(result, expected);
+    }
+}
+

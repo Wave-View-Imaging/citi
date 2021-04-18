@@ -1354,3 +1354,96 @@ mod test_cti_data_array {
         }
     }
 }
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CTIFile {
+    pub header: CTIHeader,
+    pub data: Vec<CTIDataArray>,
+}
+
+impl Default for CTIFile {
+    fn default() -> Self {
+        CTIFile {
+            header: CTIHeader::default(),
+            data: vec![],
+        }
+    }
+}
+
+
+impl CTIFile {
+    pub fn new(version: &str, name: &str) -> CTIFile {
+        CTIFile {
+            header: CTIHeader::new(version, name),
+            data: vec![],
+        }
+    }
+
+    #[cfg(test)]
+    fn blank() -> CTIFile {
+        CTIFile {
+            header: CTIHeader::blank(),
+            data: vec![],
+        }
+    }
+
+}
+
+#[cfg(test)]
+mod test_cti_file {
+    use super::*;
+
+
+    #[test]
+    fn test_default() {
+        let expected = CTIFile {
+            header: CTIHeader {
+                version: Some(String::from("A.01.00")),
+                name: Some(String::from("Name")),
+                comments: vec![],
+                devices: CTIDevices {devices: vec![]},
+                independent_variable: CTIVar {name: None, format: None, data: vec![]},
+                constants: vec![],
+            },
+            data: vec![],
+        };
+        let result = CTIFile::default();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_new() {
+        let expected = CTIFile {
+            header: CTIHeader {
+                version: Some(String::from("A.01.01")),
+                name: Some(String::from("A_NAME")),
+                comments: vec![],
+                devices: CTIDevices {devices: vec![]},
+                independent_variable: CTIVar {name: None, format: None, data: vec![]},
+                constants: vec![],
+            },
+            data: vec![],
+        };
+        let result = CTIFile::new("A.01.01", "A_NAME");
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_blank() {
+        let expected = CTIFile {
+            header: CTIHeader {
+                version: None,
+                name: None,
+                comments: vec![],
+                devices: CTIDevices {devices: vec![]},
+                independent_variable: CTIVar {name: None, format: None, data: vec![]},
+                constants: vec![],
+            },
+            data: vec![],
+        };
+        let result = CTIFile::blank();
+        assert_eq!(result, expected);
+    }
+}
+
+}

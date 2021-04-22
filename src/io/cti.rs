@@ -47,29 +47,29 @@ use thiserror::Error;
 #[derive(Error, Debug, PartialEq)]
 pub enum CTIError {
     #[error("Parsing error: `{0}`")]
-    CTIParseError(CTIParseError),
+    ParseError(CTIParseError),
     #[error("Reading error: `{0}`")]
-    CTIReaderError(CTIReaderError),
+    ReaderError(CTIReaderError),
     #[error("Invalid file error: `{0}`")]
-    CTIValidFileError(CTIValidFileError),
+    ValidFileError(CTIValidFileError),
 }
 pub type CTIResult<T> = std::result::Result<T, CTIError>;
 
 impl From<CTIParseError> for CTIError {
     fn from(error: CTIParseError) -> Self {
-        CTIError::CTIParseError(error)
+        CTIError::ParseError(error)
     }
 }
 
 impl From<CTIReaderError> for CTIError {
     fn from(error: CTIReaderError) -> Self {
-        CTIError::CTIReaderError(error)
+        CTIError::ReaderError(error)
     }
 }
 
 impl From<CTIValidFileError> for CTIError {
     fn from(error: CTIValidFileError) -> Self {
-        CTIError::CTIValidFileError(error)
+        CTIError::ValidFileError(error)
     }
 }
 
@@ -82,19 +82,19 @@ mod test_cti_error {
 
         #[test]
         fn parse_error() {
-            let error = CTIError::CTIParseError(CTIParseError::BadRegex);
+            let error = CTIError::ParseError(CTIParseError::BadRegex);
             assert_eq!(format!("{}", error), "Parsing error: `Regex could not be parsed`");
         }
 
         #[test]
         fn reader_error() {
-            let error = CTIError::CTIReaderError(CTIReaderError::DataArrayOverIndex);
+            let error = CTIError::ReaderError(CTIReaderError::DataArrayOverIndex);
             assert_eq!(format!("{}", error), "Reading error: `More data arrays than defined in header`");
         }
 
         #[test]
         fn valid_file_error() {
-            let error = CTIError::CTIValidFileError(CTIValidFileError::NoVersion);
+            let error = CTIError::ValidFileError(CTIValidFileError::NoVersion);
             assert_eq!(format!("{}", error), "Invalid file error: `Version is not defined`");
         }
     }
@@ -104,7 +104,7 @@ mod test_cti_error {
 
         #[test]
         fn from_cti_parse_error() {
-            let expected = CTIError::CTIParseError(CTIParseError::BadRegex);
+            let expected = CTIError::ParseError(CTIParseError::BadRegex);
             let input_error = CTIParseError::BadRegex;
             let result = CTIError::from(input_error);
             assert_eq!(result, expected);
@@ -112,7 +112,7 @@ mod test_cti_error {
 
         #[test]
         fn from_cti_reader_error() {
-            let expected = CTIError::CTIReaderError(CTIReaderError::DataArrayOverIndex);
+            let expected = CTIError::ReaderError(CTIReaderError::DataArrayOverIndex);
             let input_error = CTIReaderError::DataArrayOverIndex;
             let result = CTIError::from(input_error);
             assert_eq!(result, expected);
@@ -120,7 +120,7 @@ mod test_cti_error {
 
         #[test]
         fn from_cti_valid_file_error() {
-            let expected = CTIError::CTIValidFileError(CTIValidFileError::NoName);
+            let expected = CTIError::ValidFileError(CTIValidFileError::NoName);
             let input_error = CTIValidFileError::NoName;
             let result = CTIError::from(input_error);
             assert_eq!(result, expected);
@@ -1666,7 +1666,7 @@ mod test_cti_file {
 
         #[test]
         fn cannot_read_empty_file() {
-            let expected = Err(CTIError::CTIValidFileError(CTIValidFileError::NoName));
+            let expected = Err(CTIError::ValidFileError(CTIValidFileError::NoName));
             let contents = "";
             let result = CTIFile::read_str(contents);
             assert_eq!(expected, result);

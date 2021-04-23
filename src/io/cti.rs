@@ -1003,163 +1003,6 @@ mod test_cti_device {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CTIDevices {
-    pub devices: Vec<CTIDevice>,
-}
-
-impl CTIDevices {
-    fn blank() -> CTIDevices {
-        CTIDevices {
-            devices: vec![],
-        }
-    }
-
-    pub fn add(&mut self, device_name: &str, value: &str) {
-        self.create_device(device_name);
-        match self.device_index(device_name) {
-            Some(i) => self.devices[i].entries.push(String::from(value)),
-            None => (), // Never occurs
-        }
-    }
-
-    /// If the device already exists, nothing happens
-    pub fn create_device(&mut self, device_name: &str) {
-        if self.get_device(device_name) == None {
-            self.devices.push(CTIDevice::new(device_name));
-        }
-    }
-
-    pub fn get_device(&self, device_name: &str) -> Option<&CTIDevice> {
-        self.devices.iter().find(|&x| x.name == device_name)
-    }
-
-    pub fn device_index(&self, device_name: &str) -> Option<usize> {
-        self.devices.iter().position(|x| x.name == device_name)
-    }
-}
-
-#[cfg(test)]
-mod test_cti_devices {
-    use super::*;
-
-    #[test]
-    fn test_blank() {
-        let result = CTIDevices::blank();
-        let expected = CTIDevices {devices:  vec![]};
-        assert_eq!(result, expected);
-    }
-
-    #[cfg(test)]
-    mod test_add {
-        use super::*;
-
-        #[test]
-        fn empty() {
-            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]}]};
-            let mut devices = CTIDevices{devices: vec![]};
-            devices.add("NA", "VERSION HP8510B.05.00");
-            assert_eq!(devices, expected);
-        }
-
-        #[test]
-        fn double_add() {
-            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00"), String::from("REGISTER 1")]}]};
-            let mut devices = CTIDevices{devices: vec![]};
-            devices.add("NA", "VERSION HP8510B.05.00");
-            devices.add("NA", "REGISTER 1");
-            assert_eq!(devices, expected);
-        }
-
-        #[test]
-        fn add_two_devices() {
-            let expected = CTIDevices{devices: vec![
-                CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]},
-                CTIDevice{name: String::from("WVI"), entries: vec![String::from("REGISTER 1")]},
-            ]};
-            let mut devices = CTIDevices{devices: vec![]};
-            devices.add("NA", "VERSION HP8510B.05.00");
-            devices.add("WVI", "REGISTER 1");
-            assert_eq!(devices, expected);
-        }
-    }
-
-    #[cfg(test)]
-    mod test_create_device {
-        use super::*;
-
-        #[test]
-        fn empty() {
-            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
-            let mut devices = CTIDevices{devices: vec![]};
-            devices.create_device("A Name");
-            assert_eq!(devices, expected);
-        }
-
-        #[test]
-        fn appends_device() {
-            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("Different Name"), entries: vec![]}, CTIDevice{name: String::from("A Name"), entries: vec![]}]};
-            let mut devices = CTIDevices{devices: vec![CTIDevice{name: String::from("Different Name"), entries: vec![]}]};
-            devices.create_device("A Name");
-            assert_eq!(devices, expected);
-        }
-
-        #[test]
-        fn existing_device() {
-            let expected = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
-            let mut devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
-            devices.create_device("A Name");
-            assert_eq!(devices, expected);
-        }
-    }
-
-    #[cfg(test)]
-    mod test_device_index {
-        use super::*;
-
-        #[test]
-        fn empty() {
-            let devices = CTIDevices{devices: vec![]};
-            assert_eq!(devices.device_index(""), None);
-        }
-
-        #[test]
-        fn no_device_found() {
-            let devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
-            assert_eq!(devices.device_index(""), None);
-        }
-
-        #[test]
-        fn device_found() {
-            let devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
-            assert_eq!(devices.device_index("A Name"), Some(0));
-        }
-    }
-
-    #[cfg(test)]
-    mod test_get_device {
-        use super::*;
-
-        #[test]
-        fn empty() {
-            let devices = CTIDevices{devices: vec![]};
-            assert_eq!(devices.get_device(""), None);
-        }
-
-        #[test]
-        fn no_device_found() {
-            let devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
-            assert_eq!(devices.get_device(""), None);
-        }
-
-        #[test]
-        fn device_found() {
-            let devices = CTIDevices{devices: vec![CTIDevice{name: String::from("A Name"), entries: vec![]}]};
-            assert_eq!(devices.get_device("A Name"), Some(&CTIDevice{name: String::from("A Name"), entries: vec![]}));
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
 pub struct CTIVar {
     pub name: Option<String>,
     pub format: Option<String>,
@@ -1320,7 +1163,7 @@ pub struct CTIHeader {
     pub version: Option<String>,
     pub name: Option<String>,
     pub comments: Vec<String>,
-    pub devices: CTIDevices,
+    pub devices: Vec<CTIDevice>,
     pub independent_variable: CTIVar,
     pub constants: Vec<CTIConstant>,
 }
@@ -1331,7 +1174,7 @@ impl Default for CTIHeader {
             version: Some(String::from("A.01.00")),
             name: Some(String::from("Name")),
             comments: vec![],
-            devices: CTIDevices::blank(),
+            devices: vec![],
             independent_variable: CTIVar::blank(),
             constants: vec![],
         }
@@ -1344,7 +1187,7 @@ impl CTIHeader {
             version: Some(String::from(version)),
             name: Some(String::from(name)),
             comments: vec![],
-            devices: CTIDevices::blank(),
+            devices: vec![],
             independent_variable: CTIVar::blank(),
             constants: vec![],
         }
@@ -1355,10 +1198,33 @@ impl CTIHeader {
             version: None,
             name: None,
             comments: vec![],
-            devices: CTIDevices::blank(),
+            devices: vec![],
             independent_variable: CTIVar::blank(),
             constants: vec![],
         }
+    }
+
+    pub fn add_device(&mut self, device_name: &str, value: &str) {
+        self.create_device(device_name);
+        match self.index_device(device_name) {
+            Some(i) => self.devices[i].entries.push(String::from(value)),
+            None => (), // Never occurs
+        }
+    }
+
+    /// If the device already exists, nothing happens
+    pub fn create_device(&mut self, device_name: &str) {
+        if self.get_device_by_name(device_name) == None {
+            self.devices.push(CTIDevice::new(device_name));
+        }
+    }
+
+    pub fn get_device_by_name(&self, device_name: &str) -> Option<&CTIDevice> {
+        self.devices.iter().find(|&x| x.name == device_name)
+    }
+
+    pub fn index_device(&self, device_name: &str) -> Option<usize> {
+        self.devices.iter().position(|x| x.name == device_name)
     }
 }
 
@@ -1372,7 +1238,7 @@ mod test_cti_header {
             version: Some(String::from("A.01.00")),
             name: Some(String::from("Name")),
             comments: vec![],
-            devices: CTIDevices {devices: vec![]},
+            devices: vec![],
             independent_variable: CTIVar {name: None, format: None, data: vec![]},
             constants: vec![],
         };
@@ -1386,13 +1252,134 @@ mod test_cti_header {
             version: Some(String::from("A.01.01")),
             name: Some(String::from("A_NAME")),
             comments: vec![],
-            devices: CTIDevices::blank(),
+            devices: vec![],
             independent_variable: CTIVar {name: None, format: None, data: vec![]},
             constants: vec![],
         };
         let result = CTIHeader::new("A.01.01", "A_NAME");
         assert_eq!(result, expected);
     }
+
+    #[cfg(test)]
+    mod test_devices {
+        use super::*;
+
+        #[cfg(test)]
+        mod test_add_device {
+            use super::*;
+
+            #[test]
+            fn empty() {
+                let expected = vec![CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]}];
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.add_device("NA", "VERSION HP8510B.05.00");
+                assert_eq!(header.devices, expected);
+            }
+
+            #[test]
+            fn double_add() {
+                let expected = vec![CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00"), String::from("REGISTER 1")]}];
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.add_device("NA", "VERSION HP8510B.05.00");
+                header.add_device("NA", "REGISTER 1");
+                assert_eq!(header.devices, expected);
+            }
+
+            #[test]
+            fn add_two_devices() {
+                let expected = vec![
+                    CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]},
+                    CTIDevice{name: String::from("WVI"), entries: vec![String::from("REGISTER 1")]},
+                ];
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.add_device("NA", "VERSION HP8510B.05.00");
+                header.add_device("WVI", "REGISTER 1");
+                assert_eq!(header.devices, expected);
+            }
+        }
+
+        #[cfg(test)]
+        mod test_create_device {
+            use super::*;
+
+            #[test]
+            fn empty() {
+                let expected = vec![CTIDevice{name: String::from("A Name"), entries: vec![]}];
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.create_device("A Name");
+                assert_eq!(header.devices, expected);
+            }
+
+            #[test]
+            fn appends_device() {
+                let expected = vec![CTIDevice{name: String::from("Different Name"), entries: vec![]}, CTIDevice{name: String::from("A Name"), entries: vec![]}];
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.create_device("Different Name");
+                header.create_device("A Name");
+                assert_eq!(header.devices, expected);
+            }
+
+            #[test]
+            fn existing_device() {
+                let expected = vec![CTIDevice{name: String::from("A Name"), entries: vec![]}];
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.create_device("A Name");
+                header.create_device("A Name");
+                assert_eq!(header.devices, expected);
+            }
+        }
+
+        #[cfg(test)]
+        mod test_index_device {
+            use super::*;
+
+            #[test]
+            fn empty() {
+                let header = CTIHeader::new("A.01.01", "A_NAME");
+                assert_eq!(header.index_device(""), None);
+            }
+
+            #[test]
+            fn no_device_found() {
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.create_device("A Name");
+                assert_eq!(header.index_device(""), None);
+            }
+
+            #[test]
+            fn device_found() {
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.create_device("A Name");
+                assert_eq!(header.index_device("A Name"), Some(0));
+            }
+        }
+
+        #[cfg(test)]
+        mod test_get_device_by_name {
+            use super::*;
+
+            #[test]
+            fn empty() {
+                let header = CTIHeader::new("A.01.01", "A_NAME");
+                assert_eq!(header.get_device_by_name(""), None);
+            }
+
+            #[test]
+            fn no_device_found() {
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.create_device("A Name");
+                assert_eq!(header.get_device_by_name(""), None);
+            }
+
+            #[test]
+            fn device_found() {
+                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                header.create_device("A Name");
+                assert_eq!(header.get_device_by_name("A Name"), Some(&CTIDevice{name: String::from("A Name"), entries: vec![]}));
+            }
+        }
+    }
+
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -1725,7 +1712,7 @@ mod test_cti_file {
             #[test]
             fn devices() {
                 match setup() {
-                    Ok(file) => assert_eq!(file.header.devices.devices.len(), 0),
+                    Ok(file) => assert_eq!(file.header.devices.len(), 0),
                     Err(_) => panic!("File could not be read"),
                 }
             }
@@ -2040,7 +2027,7 @@ mod test_cti_file {
                 version: Some(String::from("A.01.00")),
                 name: Some(String::from("Name")),
                 comments: vec![],
-                devices: CTIDevices {devices: vec![]},
+                devices: vec![],
                 independent_variable: CTIVar {name: None, format: None, data: vec![]},
                 constants: vec![],
             },
@@ -2057,7 +2044,7 @@ mod test_cti_file {
                 version: Some(String::from("A.01.01")),
                 name: Some(String::from("A_NAME")),
                 comments: vec![],
-                devices: CTIDevices {devices: vec![]},
+                devices: vec![],
                 independent_variable: CTIVar {name: None, format: None, data: vec![]},
                 constants: vec![],
             },
@@ -2074,7 +2061,7 @@ mod test_cti_file {
                 version: None,
                 name: None,
                 comments: vec![],
-                devices: CTIDevices {devices: vec![]},
+                devices: vec![],
                 independent_variable: CTIVar {name: None, format: None, data: vec![]},
                 constants: vec![],
             },
@@ -2208,7 +2195,7 @@ impl CTIFileReaderState {
                 }
             },
             CTIKeywords::Device{name, value} => {
-                self.file.header.devices.add(&name, &value);
+                self.file.header.add_device(&name, &value);
                 Ok(self)
             },
             CTIKeywords::Comment(comment) => {
@@ -2321,7 +2308,7 @@ mod test_cti_file_reader_state {
                     version: None,
                     name: None,
                     comments: vec![],
-                    devices: CTIDevices {devices: vec![]},
+                    devices: vec![],
                     independent_variable: CTIVar {name: None, format: None, data: vec![]},
                     constants: vec![],
                 },
@@ -2465,11 +2452,10 @@ mod test_cti_file_reader_state {
             fn device() {
                 let keyword = CTIKeywords::Device{name: String::from("NA"), value: String::from("Value")};
                 let state = initialize_state();
-                let mut expected = CTIDevices::blank();
-                expected.add("NA", "Value");
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.devices, expected);
+                        assert_eq!(s.file.header.devices.len(), 1);
+                        assert_eq!(s.file.header.devices[0], CTIDevice{name: String::from("NA"), entries: vec![String::from("Value")]});
                         assert_eq!(s.state, CTIFileReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2480,13 +2466,12 @@ mod test_cti_file_reader_state {
             fn device_with_existing_device() {
                 let keyword = CTIKeywords::Device{name: String::from("WVI"), value: String::from("1904")};
                 let mut state = initialize_state();
-                state.file.header.devices.add("NA", "Value");
-                let mut expected = CTIDevices::blank();
-                expected.add("NA", "Value");
-                expected.add("WVI", "1904");
+                state.file.header.add_device("NA", "Value");
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.devices, expected);
+                        assert_eq!(s.file.header.devices.len(), 2);
+                        assert_eq!(s.file.header.devices[0], CTIDevice{name: String::from("NA"), entries: vec![String::from("Value")]});
+                        assert_eq!(s.file.header.devices[1], CTIDevice{name: String::from("WVI"), entries: vec![String::from("1904")]});
                         assert_eq!(s.state, CTIFileReaderStates::Header);
                     },
                     Err(_) => panic!(),

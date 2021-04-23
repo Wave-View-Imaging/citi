@@ -1,4 +1,4 @@
-use reco::io::cti::{CTIResult, CTIFile, CTIDevice, CTIDevices};
+use reco::io::cti::{CTIResult, CTIFile, CTIDevice};
 use std::path::PathBuf;
 
 macro_rules! assert_array_relative_eq {
@@ -108,11 +108,11 @@ mod cti_regression_tests {
         fn devices() {
             match setup() {
                 Ok(file) => {
-                    assert_eq!(file.header.devices.devices.len(), 1);
-                    assert_eq!(file.header.devices.devices[0].name, String::from("NA"));
-                    assert_eq!(file.header.devices.devices[0].entries.len(), 2);
-                    assert_eq!(file.header.devices.devices[0].entries[0], String::from("VERSION HP8510B.05.00"));
-                    assert_eq!(file.header.devices.devices[0].entries[1], String::from("REGISTER 1"));
+                    assert_eq!(file.header.devices.len(), 1);
+                    assert_eq!(file.header.devices[0].name, String::from("NA"));
+                    assert_eq!(file.header.devices[0].entries.len(), 2);
+                    assert_eq!(file.header.devices[0].entries[0], String::from("VERSION HP8510B.05.00"));
+                    assert_eq!(file.header.devices[0].entries[1], String::from("REGISTER 1"));
                 },
                 Err(_) => panic!("File could not be read"),
             }
@@ -201,11 +201,11 @@ mod cti_regression_tests {
         fn devices() {
             match setup() {
                 Ok(file) => {
-                    assert_eq!(file.header.devices.devices.len(), 1);
-                    assert_eq!(file.header.devices.devices[0].name, String::from("NA"));
-                    assert_eq!(file.header.devices.devices[0].entries.len(), 2);
-                    assert_eq!(file.header.devices.devices[0].entries[0], String::from("VERSION HP8510B.05.00"));
-                    assert_eq!(file.header.devices.devices[0].entries[1], String::from("REGISTER 1"));
+                    assert_eq!(file.header.devices.len(), 1);
+                    assert_eq!(file.header.devices[0].name, String::from("NA"));
+                    assert_eq!(file.header.devices[0].entries.len(), 2);
+                    assert_eq!(file.header.devices[0].entries[0], String::from("VERSION HP8510B.05.00"));
+                    assert_eq!(file.header.devices[0].entries[1], String::from("REGISTER 1"));
                 },
                 Err(_) => panic!("File could not be read"),
             }
@@ -323,7 +323,7 @@ mod cti_regression_tests {
         fn devices() {
             match setup() {
                 Ok(file) => {
-                    assert_eq!(file.header.devices.devices, vec![]);
+                    assert_eq!(file.header.devices.len(), 0);
                 },
                 Err(_) => panic!("File could not be read"),
             }
@@ -438,9 +438,7 @@ mod cti_regression_tests {
                             "ARB_SEG 2000000000 3000000000 3",
                         ].iter().map(|&s| String::from(s)).collect(),
                     };
-                    let devices = CTIDevices{
-                        devices: vec![device],
-                    };
+                    let devices = vec![device];
 
                     assert_eq!(file.header.devices, devices);
                 },

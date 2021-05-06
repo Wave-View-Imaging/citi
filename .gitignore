@@ -1,10 +1,66 @@
-# Rust
+# Auto generated files
+build/*
+*.slo
+*.lo
+*.o
+*.obj
+*.suo
+*.tlog
+*.ilk
+*.log
+*.pdb
+*.idb
+*.iobj
+*.ipdb
+*.opensdf
+*.sdf
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# .orig files
+*.orig
+
+# generated files
+generated
+
+# Cmake
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Makefile
+cmake_install.cmake
+install_manifest.txt
+/tests/tests.VC.VC.opendb
+/tests/tests.VC.db
+/tests/tests
+/tests/logs/*
+/Testing/*
 /target
+*build*
+
+# IDE/Editor
+*vim*
+
+# OS
+.DS_Store
+
+# Rust 
 Cargo.lock
 
 # Python
 *.egg-info
-*.so
-*.dylib
-*.dll
 __pycache__

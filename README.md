@@ -44,6 +44,36 @@ Note that everything is linted including source and out of source tests.
 flake8
 ```
 
+## C++
+
+### CMake
+Use the following command to run `cmake` and generate the build files for a debug build.
+Note that this command assumes at the command is invoked from the root directory and that
+the directory `./ffi/cpp/build/debug/` exists. Also, the command sets the `BUILD_TESTING`
+to `ON`.
+```bash
+cmake -S ./ -B ./ffi/cpp/build/debug -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+```
+
+Similarly, use the following command to generate a release build without building tests.
+```bash
+cmake -S ./ -B ./ffi/cpp/build/release -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+```
+
+### Building
+Invoke the following command with the path to the build directory to build the project.
+```bash
+cmake --build <path to build directory>
+```
+
+### Testing
+If tests were enabled, then the executable for running the tests will be found under the
+`tests` directory within the respective `build` directory. For example, the following command
+shows how the executable `test_exec` can be invoked on a unix system.
+```bash
+./ffi/cpp/build/debug/ffi/cpp/tests/test_exec
+```
+
 ## Creating a release
 
 ### Create Release

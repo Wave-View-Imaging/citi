@@ -22,7 +22,8 @@ rand = "0.8.3"
 criterion = "0.3.4"
 
 [lib]
-crate-type = ["lib", "cdylib"]
+name = "citi"
+crate-type = ["lib", "staticlib", "cdylib"]
 bench = false
 
 [[bench]]

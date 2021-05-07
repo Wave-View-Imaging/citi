@@ -116,6 +116,14 @@ mod test_error {
             let result = Error::from(input_error);
             assert_eq!(result, expected);
         }
+
+        #[test]
+        fn from_writer_error() {
+            let expected = Error::WriteError(WriteError::NoVersion);
+            let input_error = WriteError::NoVersion;
+            let result = Error::from(input_error);
+            assert_eq!(result, expected);
+        }
     }
 }
 

@@ -1,5 +1,5 @@
-# Reco
-RF Imaging Reconstruction Algorithms
+# Citi
+Read and write .cti files.
 
 ![Build Status](https://github.com/Wave-View-Imaging/citi/actions/workflows/ci.yml/badge.svg)
 

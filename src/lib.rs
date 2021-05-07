@@ -48,39 +48,15 @@ use thiserror::Error;
 #[derive(Error, Debug, PartialEq)]
 pub enum Error {
     #[error("Parsing error: `{0}`")]
-    ParseError(ParseError),
+    ParseError(#[from] ParseError),
     #[error("Reading error: `{0}`")]
-    ReaderError(ReaderError),
+    ReaderError(#[from] ReaderError),
     #[error("Invalid record error: `{0}`")]
-    ValidRecordError(ValidRecordError),
+    ValidRecordError(#[from] ValidRecordError),
     #[error("Error writing record: `{0}`")]
-    WriteError(WriteError),
+    WriteError(#[from] WriteError)
 }
 pub type Result<T> = std::result::Result<T, Error>;
-
-impl From<ParseError> for Error {
-    fn from(error: ParseError) -> Self {
-        Error::ParseError(error)
-    }
-}
-
-impl From<ReaderError> for Error {
-    fn from(error: ReaderError) -> Self {
-        Error::ReaderError(error)
-    }
-}
-
-impl From<ValidRecordError> for Error {
-    fn from(error: ValidRecordError) -> Self {
-        Error::ValidRecordError(error)
-    }
-}
-
-impl From<WriteError> for Error {
-    fn from(error: WriteError) -> Self {
-        Error::WriteError(error)
-    }
-}
 
 #[cfg(test)]
 mod test_error {
@@ -1675,6 +1651,11 @@ impl Record {
 
         Ok(())
     }
+
+    // pub fn write_to_sink<W: std::io::Write>(self, writer: &mut W) -> Result<()> {
+    //     write!(writer, "{}", self).unwrap();
+    //     Ok(())
+    // }
 
     fn get_data_keywords(&self) -> WriteResult<Vec<Keywords>> {
         let mut keywords: Vec<Keywords> = vec![];

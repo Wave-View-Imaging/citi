@@ -1,0 +1,2 @@
+# Prevent EOL conversion in git, introducing a carriage return
+display_memory_output.cti   text eol=lf

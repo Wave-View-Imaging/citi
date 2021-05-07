@@ -1,4 +1,4 @@
-//! Input/Output for CTI files
+//! Input/Output for CITI files
 //! 
 //! <p><a href="http://literature.cdn.keysight.com/litweb/pdf/ads15/cktsim/ck2016.html#:~:text=CITIfile%20stands%20for%20Common%20Instrumentation,it%20can%20meet%20future%20needs">The standard</a>, defines the following entities:</p>
 //! 
@@ -25,7 +25,7 @@
 //! 
 //! ## Input-Output consistency:
 //! 
-//! General input-output consistency cannot be guaranteed with CTI files because of their design.
+//! General input-output consistency cannot be guaranteed with CITI files because of their design.
 //! That is, if a file is read in and read out, the byte representation of the file may change,
 //! exact floating point representations may change, but the file will contain the same information.
 //! The following is not guaranteed:
@@ -45,36 +45,36 @@ use std::path::{Path,PathBuf};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
-pub enum CTIError {
+pub enum Error {
     #[error("Parsing error: `{0}`")]
-    ParseError(CTIParseError),
+    ParseError(ParseError),
     #[error("Reading error: `{0}`")]
-    ReaderError(CTIReaderError),
+    ReaderError(ReaderError),
     #[error("Invalid file error: `{0}`")]
-    ValidFileError(CTIValidFileError),
+    ValidRecordError(ValidRecordError),
 }
-pub type CTIResult<T> = std::result::Result<T, CTIError>;
+pub type Result<T> = std::result::Result<T, Error>;
 
-impl From<CTIParseError> for CTIError {
-    fn from(error: CTIParseError) -> Self {
-        CTIError::ParseError(error)
+impl From<ParseError> for Error {
+    fn from(error: ParseError) -> Self {
+        Error::ParseError(error)
     }
 }
 
-impl From<CTIReaderError> for CTIError {
-    fn from(error: CTIReaderError) -> Self {
-        CTIError::ReaderError(error)
+impl From<ReaderError> for Error {
+    fn from(error: ReaderError) -> Self {
+        Error::ReaderError(error)
     }
 }
 
-impl From<CTIValidFileError> for CTIError {
-    fn from(error: CTIValidFileError) -> Self {
-        CTIError::ValidFileError(error)
+impl From<ValidRecordError> for Error {
+    fn from(error: ValidRecordError) -> Self {
+        Error::ValidRecordError(error)
     }
 }
 
 #[cfg(test)]
-mod test_cti_error {
+mod test_error {
     use super::*;
 
     mod test_display {
@@ -82,19 +82,19 @@ mod test_cti_error {
 
         #[test]
         fn parse_error() {
-            let error = CTIError::ParseError(CTIParseError::BadRegex);
+            let error = Error::ParseError(ParseError::BadRegex);
             assert_eq!(format!("{}", error), "Parsing error: `Regex could not be parsed`");
         }
 
         #[test]
         fn reader_error() {
-            let error = CTIError::ReaderError(CTIReaderError::DataArrayOverIndex);
+            let error = Error::ReaderError(ReaderError::DataArrayOverIndex);
             assert_eq!(format!("{}", error), "Reading error: `More data arrays than defined in header`");
         }
 
         #[test]
         fn valid_file_error() {
-            let error = CTIError::ValidFileError(CTIValidFileError::NoVersion);
+            let error = Error::ValidRecordError(ValidRecordError::NoVersion);
             assert_eq!(format!("{}", error), "Invalid file error: `Version is not defined`");
         }
     }
@@ -103,33 +103,33 @@ mod test_cti_error {
         use super::*;
 
         #[test]
-        fn from_cti_parse_error() {
-            let expected = CTIError::ParseError(CTIParseError::BadRegex);
-            let input_error = CTIParseError::BadRegex;
-            let result = CTIError::from(input_error);
+        fn from_parse_error() {
+            let expected = Error::ParseError(ParseError::BadRegex);
+            let input_error = ParseError::BadRegex;
+            let result = Error::from(input_error);
             assert_eq!(result, expected);
         }
 
         #[test]
-        fn from_cti_reader_error() {
-            let expected = CTIError::ReaderError(CTIReaderError::DataArrayOverIndex);
-            let input_error = CTIReaderError::DataArrayOverIndex;
-            let result = CTIError::from(input_error);
+        fn from_reader_error() {
+            let expected = Error::ReaderError(ReaderError::DataArrayOverIndex);
+            let input_error = ReaderError::DataArrayOverIndex;
+            let result = Error::from(input_error);
             assert_eq!(result, expected);
         }
 
         #[test]
-        fn from_cti_valid_file_error() {
-            let expected = CTIError::ValidFileError(CTIValidFileError::NoName);
-            let input_error = CTIValidFileError::NoName;
-            let result = CTIError::from(input_error);
+        fn from_valid_file_error() {
+            let expected = Error::ValidRecordError(ValidRecordError::NoName);
+            let input_error = ValidRecordError::NoName;
+            let result = Error::from(input_error);
             assert_eq!(result, expected);
         }
     }
 }
 
 #[derive(Error, Debug, PartialEq)]
-pub enum CTIParseError {
+pub enum ParseError {
     #[error("Keyword `{0}` is not supported")]
     BadKeyword(String),
     #[error("Regex could not be parsed")]
@@ -137,10 +137,10 @@ pub enum CTIParseError {
     #[error("Cannot parse as number `{0}`")]
     NumberParseError(String),
 }
-// type CTIParseResult<T> = std::result::Result<T, CTIParseError>;
+// type ParseResult<T> = std::result::Result<T, ParseError>;
 
 #[cfg(test)]
-mod test_cti_parse_error {
+mod test_parse_error {
     use super::*;
 
     mod test_display {
@@ -148,38 +148,38 @@ mod test_cti_parse_error {
 
         #[test]
         fn bad_keyword() {
-            let error = CTIParseError::BadKeyword(String::from("asdf"));
+            let error = ParseError::BadKeyword(String::from("asdf"));
             assert_eq!(format!("{}", error), "Keyword `asdf` is not supported");
         }
 
         #[test]
         fn bad_keyword_second() {
-            let error = CTIParseError::BadKeyword(String::from("----"));
+            let error = ParseError::BadKeyword(String::from("----"));
             assert_eq!(format!("{}", error), "Keyword `----` is not supported");
         }
 
         #[test]
         fn number_parse_error() {
-            let error = CTIParseError::NumberParseError(String::from("asdf"));
+            let error = ParseError::NumberParseError(String::from("asdf"));
             assert_eq!(format!("{}", error), "Cannot parse as number `asdf`");
         }
 
         #[test]
         fn number_parse_error_second() {
-            let error = CTIParseError::NumberParseError(String::from("----"));
+            let error = ParseError::NumberParseError(String::from("----"));
             assert_eq!(format!("{}", error), "Cannot parse as number `----`");
         }
 
         #[test]
         fn bad_regex() {
-            let error = CTIParseError::BadRegex;
+            let error = ParseError::BadRegex;
             assert_eq!(format!("{}", error), "Regex could not be parsed");
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub enum CTIKeywords {
+pub enum Keywords {
     /// CITIFile version e.g. A.01.01
     CITIFile{version: String},
     /// Name. Single word with no spaces. e.g. CAL_SET
@@ -214,18 +214,18 @@ pub enum CTIKeywords {
     Comment(String),
 }
 
-impl FromStr for CTIKeywords {
-    type Err = CTIParseError;
+impl FromStr for Keywords {
+    type Err = ParseError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        CTIKeywords::try_from(s)
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Keywords::try_from(s)
     }
 }
 
-impl TryFrom<&str> for CTIKeywords {
-    type Error = CTIParseError;
+impl TryFrom<&str> for Keywords {
+    type Error = ParseError;
 
-    fn try_from(line: &str) -> Result<Self, Self::Error> {
+    fn try_from(line: &str) -> std::result::Result<Self, Self::Error> {
         // Avoid recompiling each time
         lazy_static! {
             static ref RE_DEVICE: Regex = Regex::new(r"^#(?P<Name>\S+) (?P<Value>.*)$").unwrap();
@@ -241,110 +241,110 @@ impl TryFrom<&str> for CTIKeywords {
         }
 
         match line {
-            "SEG_LIST_BEGIN" => Ok(CTIKeywords::SegListBegin),
-            "SEG_LIST_END" => Ok(CTIKeywords::SegListEnd),
-            "VAR_LIST_BEGIN" => Ok(CTIKeywords::VarListBegin),
-            "VAR_LIST_END" => Ok(CTIKeywords::VarListEnd),
-            "BEGIN" => Ok(CTIKeywords::Begin),
-            "END" => Ok(CTIKeywords::End),
+            "SEG_LIST_BEGIN" => Ok(Keywords::SegListBegin),
+            "SEG_LIST_END" => Ok(Keywords::SegListEnd),
+            "VAR_LIST_BEGIN" => Ok(Keywords::VarListBegin),
+            "VAR_LIST_END" => Ok(Keywords::VarListEnd),
+            "BEGIN" => Ok(Keywords::Begin),
+            "END" => Ok(Keywords::End),
             _ if RE_DATA_PAIR.is_match(line) => {
-                let cap = RE_DATA_PAIR.captures(line).ok_or(CTIParseError::BadRegex)?;
-                Ok(CTIKeywords::DataPair{
-                    real: cap.name("Real").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?.parse::<f64>().map_err(|_| CTIParseError::NumberParseError(String::from(line)))?,
-                    imag: cap.name("Imag").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?.parse::<f64>().map_err(|_| CTIParseError::NumberParseError(String::from(line)))?,
+                let cap = RE_DATA_PAIR.captures(line).ok_or(ParseError::BadRegex)?;
+                Ok(Keywords::DataPair{
+                    real: cap.name("Real").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
+                    imag: cap.name("Imag").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
                 })
             },
             _ if RE_DEVICE.is_match(line) => {
-                let cap = RE_DEVICE.captures(line).ok_or(CTIParseError::BadRegex)?;
-                Ok(CTIKeywords::Device{
-                    name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?),
-                    value: String::from(cap.name("Value").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?),
+                let cap = RE_DEVICE.captures(line).ok_or(ParseError::BadRegex)?;
+                Ok(Keywords::Device{
+                    name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
+                    value: String::from(cap.name("Value").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                 })
             },
             _ if RE_SEG_ITEM.is_match(line) => {
-                let cap = RE_SEG_ITEM.captures(line).ok_or(CTIParseError::BadRegex)?;
-                Ok(CTIKeywords::SegItem{
-                    first: cap.name("First").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?.parse::<f64>().map_err(|_| CTIParseError::NumberParseError(String::from(line)))?,
-                    last: cap.name("Last").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?.parse::<f64>().map_err(|_| CTIParseError::NumberParseError(String::from(line)))?,
-                    number: cap.name("Number").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?.parse::<usize>().map_err(|_| CTIParseError::NumberParseError(String::from(line)))?,
+                let cap = RE_SEG_ITEM.captures(line).ok_or(ParseError::BadRegex)?;
+                Ok(Keywords::SegItem{
+                    first: cap.name("First").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
+                    last: cap.name("Last").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
+                    number: cap.name("Number").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<usize>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
                 })
             },
             _ if RE_VAR_ITEM.is_match(line) => {
-                let cap = RE_VAR_ITEM.captures(line).ok_or(CTIParseError::BadRegex)?;
-                Ok(CTIKeywords::VarListItem(
-                    cap.name("Value").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?.parse::<f64>().map_err(|_| CTIParseError::NumberParseError(String::from(line)))?
+                let cap = RE_VAR_ITEM.captures(line).ok_or(ParseError::BadRegex)?;
+                Ok(Keywords::VarListItem(
+                    cap.name("Value").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?
                 ))
             },
             _ if RE_DATA.is_match(line) => {
-                let cap = RE_DATA.captures(line).ok_or(CTIParseError::BadRegex)?;
-                Ok(CTIKeywords::Data{
-                    name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?),
-                    format: String::from(cap.name("Format").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?),
+                let cap = RE_DATA.captures(line).ok_or(ParseError::BadRegex)?;
+                Ok(Keywords::Data{
+                    name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
+                    format: String::from(cap.name("Format").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                 })
             },
             _ if RE_VAR.is_match(line) => {
-                let cap = RE_VAR.captures(line).ok_or(CTIParseError::BadRegex)?;
+                let cap = RE_VAR.captures(line).ok_or(ParseError::BadRegex)?;
                 let closure = |m: String| {if m.is_empty() {None} else {Some(m)}};
-                Ok(CTIKeywords::Var{
-                    name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?),
-                    format: closure(cap.name("Format").map(|m| String::from(m.as_str())).ok_or(CTIParseError::BadRegex)?),
-                    length: cap.name("Length").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?.parse::<usize>().map_err(|_| CTIParseError::NumberParseError(String::from(line)))?,
+                Ok(Keywords::Var{
+                    name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
+                    format: closure(cap.name("Format").map(|m| String::from(m.as_str())).ok_or(ParseError::BadRegex)?),
+                    length: cap.name("Length").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<usize>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
                 })
             },
             _ if RE_COMMENT.is_match(line) => {
-                let cap = RE_COMMENT.captures(line).ok_or(CTIParseError::BadRegex)?;
-                Ok(CTIKeywords::Comment(String::from(cap.name("Comment").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?)))
+                let cap = RE_COMMENT.captures(line).ok_or(ParseError::BadRegex)?;
+                Ok(Keywords::Comment(String::from(cap.name("Comment").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)))
             },
             _ if RE_CITIFILE.is_match(line) => {
-                let cap = RE_CITIFILE.captures(line).ok_or(CTIParseError::BadRegex)?;
-                Ok(CTIKeywords::CITIFile{
-                    version: String::from(cap.name("Version").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?)
+                let cap = RE_CITIFILE.captures(line).ok_or(ParseError::BadRegex)?;
+                Ok(Keywords::CITIFile{
+                    version: String::from(cap.name("Version").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)
                 })
             },
             _ if RE_NAME.is_match(line) => {
-                let cap = RE_NAME.captures(line).ok_or(CTIParseError::BadRegex)?;
-                Ok(CTIKeywords::Name(String::from(cap.name("Name").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?)))
+                let cap = RE_NAME.captures(line).ok_or(ParseError::BadRegex)?;
+                Ok(Keywords::Name(String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)))
             },
             _ if RE_CONSTANT.is_match(line) => {
-                let cap = RE_CONSTANT.captures(line).ok_or(CTIParseError::BadRegex)?;
-                Ok(CTIKeywords::Constant{
-                    name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?),
-                    value: String::from(cap.name("Value").map(|m| m.as_str()).ok_or(CTIParseError::BadRegex)?)
+                let cap = RE_CONSTANT.captures(line).ok_or(ParseError::BadRegex)?;
+                Ok(Keywords::Constant{
+                    name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
+                    value: String::from(cap.name("Value").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)
                 })
             },
-            _ => Err(CTIParseError::BadKeyword(String::from(line))),
+            _ => Err(ParseError::BadKeyword(String::from(line))),
         }
     }
 }
 
-impl fmt::Display for CTIKeywords {
+impl fmt::Display for Keywords {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            CTIKeywords::CITIFile{version} => write!(f, "CITIFILE {}", version),
-            CTIKeywords::Name(name) => write!(f, "NAME {}", name),
-            CTIKeywords::Var{name, format, length} => match format {
+            Keywords::CITIFile{version} => write!(f, "CITIFILE {}", version),
+            Keywords::Name(name) => write!(f, "NAME {}", name),
+            Keywords::Var{name, format, length} => match format {
                 Some(form) => write!(f, "VAR {} {} {}", name, form, length),
                 None => write!(f, "VAR {} {}", name, length),
             },
-            CTIKeywords::Constant{name, value} => write!(f, "CONSTANT {} {}", name, value),
-            CTIKeywords::Device{name, value} => write!(f, "#{} {}", name, value),
-            CTIKeywords::SegListBegin => write!(f, "SEG_LIST_BEGIN"),
-            CTIKeywords::SegItem{first, last, number} => write!(f, "SEG {} {} {}", first, last, number),
-            CTIKeywords::SegListEnd => write!(f, "SEG_LIST_END"),
-            CTIKeywords::VarListBegin => write!(f, "VAR_LIST_BEGIN"),
-            CTIKeywords::VarListItem(n) => write!(f, "{}", n),
-            CTIKeywords::VarListEnd => write!(f, "VAR_LIST_END"),
-            CTIKeywords::Data{name, format} => write!(f, "DATA {} {}", name, format),
-            CTIKeywords::DataPair{real, imag} => write!(f, "{:E},{:E}", real, imag),
-            CTIKeywords::Begin => write!(f, "BEGIN"),
-            CTIKeywords::End => write!(f, "END"),
-            CTIKeywords::Comment(comment) => write!(f, "!{}", comment),
+            Keywords::Constant{name, value} => write!(f, "CONSTANT {} {}", name, value),
+            Keywords::Device{name, value} => write!(f, "#{} {}", name, value),
+            Keywords::SegListBegin => write!(f, "SEG_LIST_BEGIN"),
+            Keywords::SegItem{first, last, number} => write!(f, "SEG {} {} {}", first, last, number),
+            Keywords::SegListEnd => write!(f, "SEG_LIST_END"),
+            Keywords::VarListBegin => write!(f, "VAR_LIST_BEGIN"),
+            Keywords::VarListItem(n) => write!(f, "{}", n),
+            Keywords::VarListEnd => write!(f, "VAR_LIST_END"),
+            Keywords::Data{name, format} => write!(f, "DATA {} {}", name, format),
+            Keywords::DataPair{real, imag} => write!(f, "{:E},{:E}", real, imag),
+            Keywords::Begin => write!(f, "BEGIN"),
+            Keywords::End => write!(f, "END"),
+            Keywords::Comment(comment) => write!(f, "!{}", comment),
         }
     }
 }
 
 #[cfg(test)]
-mod test_cti_keywords {
+mod test_keywords {
     use super::*;
 
     #[cfg(test)]
@@ -353,133 +353,133 @@ mod test_cti_keywords {
 
         #[test]
         fn citifile_a_01_00() {
-            let keyword = CTIKeywords::CITIFile{version: String::from("A.01.00")};
+            let keyword = Keywords::CITIFile{version: String::from("A.01.00")};
             assert_eq!("CITIFILE A.01.00", format!("{}", keyword));
         }
 
         #[test]
         fn citifile_a_01_01() {
-            let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+            let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
             assert_eq!("CITIFILE A.01.01", format!("{}", keyword));
         }
 
         #[test]
         fn name() {
-            let keyword = CTIKeywords::Name(String::from("CAL_SET"));
+            let keyword = Keywords::Name(String::from("CAL_SET"));
             assert_eq!("NAME CAL_SET", format!("{}", keyword));
         }
 
         #[test]
         fn var_standard() {
-            let keyword = CTIKeywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 201};
+            let keyword = Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 201};
             assert_eq!("VAR FREQ MAG 201", format!("{}", keyword));
         }
 
         #[test]
         fn var_no_format() {
-            let keyword = CTIKeywords::Var{name: String::from("FREQ"), format: None, length: 202};
+            let keyword = Keywords::Var{name: String::from("FREQ"), format: None, length: 202};
             assert_eq!("VAR FREQ 202", format!("{}", keyword));
         }
 
         #[test]
         fn constant() {
-            let keyword = CTIKeywords::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")};
+            let keyword = Keywords::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")};
             assert_eq!("CONSTANT A_CONSTANT 1.2345", format!("{}", keyword));
         }
 
         #[test]
         fn device() {
-            let keyword = CTIKeywords::Device{name: String::from("NA"), value: String::from("REGISTER 1")};
+            let keyword = Keywords::Device{name: String::from("NA"), value: String::from("REGISTER 1")};
             assert_eq!("#NA REGISTER 1", format!("{}", keyword));
         }
 
         #[test]
         fn device_number() {
-            let keyword = CTIKeywords::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")};
+            let keyword = Keywords::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")};
             assert_eq!("#NA POWER2 1.0E1", format!("{}", keyword));
         }
 
         #[test]
         fn device_name() {
-            let keyword = CTIKeywords::Device{name: String::from("WVI"), value: String::from("A B")};
+            let keyword = Keywords::Device{name: String::from("WVI"), value: String::from("A B")};
             assert_eq!("#WVI A B", format!("{}", keyword));
         }
 
         #[test]
         fn seg_list_begin() {
-            let keyword = CTIKeywords::SegListBegin;
+            let keyword = Keywords::SegListBegin;
             assert_eq!("SEG_LIST_BEGIN", format!("{}", keyword));
         }
 
         #[test]
         fn seg_item() {
-            let keyword = CTIKeywords::SegItem{first: 1000000000., last: 4000000000., number: 10};
+            let keyword = Keywords::SegItem{first: 1000000000., last: 4000000000., number: 10};
             assert_eq!("SEG 1000000000 4000000000 10", format!("{}", keyword));
         }
 
         #[test]
         fn seg_list_end() {
-            let keyword = CTIKeywords::SegListEnd;
+            let keyword = Keywords::SegListEnd;
             assert_eq!("SEG_LIST_END", format!("{}", keyword));
         }
 
         #[test]
         fn var_list_begin() {
-            let keyword = CTIKeywords::VarListBegin;
+            let keyword = Keywords::VarListBegin;
             assert_eq!("VAR_LIST_BEGIN", format!("{}", keyword));
         }
 
         #[test]
         fn var_item() {
-            let keyword = CTIKeywords::VarListItem(100000.);
+            let keyword = Keywords::VarListItem(100000.);
             assert_eq!("100000", format!("{}", keyword));
         }
 
         #[test]
         fn var_list_end() {
-            let keyword = CTIKeywords::VarListEnd;
+            let keyword = Keywords::VarListEnd;
             assert_eq!("VAR_LIST_END", format!("{}", keyword));
         }
 
         #[test]
         fn data_s11() {
-            let keyword = CTIKeywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
+            let keyword = Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
             assert_eq!("DATA S[1,1] RI", format!("{}", keyword));
         }
 
         #[test]
         fn data_e() {
-            let keyword = CTIKeywords::Data{name: String::from("E"), format: String::from("RI")};
+            let keyword = Keywords::Data{name: String::from("E"), format: String::from("RI")};
             assert_eq!("DATA E RI", format!("{}", keyword));
         }
 
         #[test]
         fn data_pair_simple() {
-            let keyword = CTIKeywords::DataPair{real: 1e9, imag: -1e9};
+            let keyword = Keywords::DataPair{real: 1e9, imag: -1e9};
             assert_eq!("1E9,-1E9", format!("{}", keyword));
         }
         
         #[test]
         fn data_pair() {
-            let keyword = CTIKeywords::DataPair{real: 0.86303e-1, imag: -8.98651e-1};
+            let keyword = Keywords::DataPair{real: 0.86303e-1, imag: -8.98651e-1};
             assert_eq!("8.6303E-2,-8.98651E-1", format!("{}", keyword));
         }
 
         #[test]
         fn begin() {
-            let keyword = CTIKeywords::Begin;
+            let keyword = Keywords::Begin;
             assert_eq!("BEGIN", format!("{}", keyword));
         }
 
         #[test]
         fn end() {
-            let keyword = CTIKeywords::End;
+            let keyword = Keywords::End;
             assert_eq!("END", format!("{}", keyword));
         }
 
         #[test]
         fn comment() {
-            let keyword = CTIKeywords::Comment(String::from("DATE: 2019.11.01"));
+            let keyword = Keywords::Comment(String::from("DATE: 2019.11.01"));
             assert_eq!("!DATE: 2019.11.01", format!("{}", keyword));
         }
     }
@@ -491,81 +491,81 @@ mod test_cti_keywords {
 
         #[test]
         fn fails_on_bad_string() {
-            let keyword = CTIKeywords::from_str("this is a bad string");
-            assert_eq!(keyword, Err(CTIParseError::BadKeyword(String::from("this is a bad string"))));
+            let keyword = Keywords::from_str("this is a bad string");
+            assert_eq!(keyword, Err(ParseError::BadKeyword(String::from("this is a bad string"))));
         }
 
         #[test]
         fn citifile_a_01_00() {
-            let keyword = CTIKeywords::from_str("CITIFILE A.01.00");
-            assert_eq!(keyword, Ok(CTIKeywords::CITIFile{version: String::from("A.01.00")}));
+            let keyword = Keywords::from_str("CITIFILE A.01.00");
+            assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.00")}));
         }
 
         #[test]
         fn citifile_a_01_01() {
-            let keyword = CTIKeywords::from_str("CITIFILE A.01.01");
-            assert_eq!(keyword, Ok(CTIKeywords::CITIFile{version: String::from("A.01.01")}));
+            let keyword = Keywords::from_str("CITIFILE A.01.01");
+            assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.01")}));
         }
 
         #[test]
         fn name_cal_set() {
-            let keyword = CTIKeywords::from_str("NAME CAL_SET");
-            assert_eq!(keyword, Ok(CTIKeywords::Name(String::from("CAL_SET"))));
+            let keyword = Keywords::from_str("NAME CAL_SET");
+            assert_eq!(keyword, Ok(Keywords::Name(String::from("CAL_SET"))));
         }
 
         #[test]
         fn name_raw_data() {
-            let keyword = CTIKeywords::from_str("NAME RAW_DATA");
-            assert_eq!(keyword, Ok(CTIKeywords::Name(String::from("RAW_DATA"))));
+            let keyword = Keywords::from_str("NAME RAW_DATA");
+            assert_eq!(keyword, Ok(Keywords::Name(String::from("RAW_DATA"))));
         }
 
         #[test]
         fn constant() {
-            let keyword = CTIKeywords::from_str("CONSTANT A_CONSTANT 1.2345");
-            assert_eq!(keyword, Ok(CTIKeywords::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")}));
+            let keyword = Keywords::from_str("CONSTANT A_CONSTANT 1.2345");
+            assert_eq!(keyword, Ok(Keywords::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")}));
         }
 
         #[test]
         fn device() {
-            let keyword = CTIKeywords::from_str("#NA REGISTER 1");
-            assert_eq!(keyword, Ok(CTIKeywords::Device{name: String::from("NA"), value: String::from("REGISTER 1")}));
+            let keyword = Keywords::from_str("#NA REGISTER 1");
+            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("NA"), value: String::from("REGISTER 1")}));
         }
 
         #[test]
         fn device_number() {
-            let keyword = CTIKeywords::from_str("#NA POWER2 1.0E1");
-            assert_eq!(keyword, Ok(CTIKeywords::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")}));
+            let keyword = Keywords::from_str("#NA POWER2 1.0E1");
+            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")}));
         }
 
         #[test]
         fn device_name() {
-            let keyword = CTIKeywords::from_str("#WVI A B");
-            assert_eq!(keyword, Ok(CTIKeywords::Device{name: String::from("WVI"), value: String::from("A B")}));
+            let keyword = Keywords::from_str("#WVI A B");
+            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("WVI"), value: String::from("A B")}));
         }
 
         #[test]
         fn var_standard() {
-            let keyword = CTIKeywords::from_str("VAR FREQ MAG 201");
-            assert_eq!(keyword, Ok(CTIKeywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 201}));
+            let keyword = Keywords::from_str("VAR FREQ MAG 201");
+            assert_eq!(keyword, Ok(Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 201}));
         }
 
         #[test]
         fn var_no_format() {
-            let keyword = CTIKeywords::from_str("VAR FREQ 202");
-            assert_eq!(keyword, Ok(CTIKeywords::Var{name: String::from("FREQ"), format: None, length: 202}));
+            let keyword = Keywords::from_str("VAR FREQ 202");
+            assert_eq!(keyword, Ok(Keywords::Var{name: String::from("FREQ"), format: None, length: 202}));
         }
 
         #[test]
         fn seg_list_begin() {
-            let keyword = CTIKeywords::from_str("SEG_LIST_BEGIN");
-            assert_eq!(keyword, Ok(CTIKeywords::SegListBegin));
+            let keyword = Keywords::from_str("SEG_LIST_BEGIN");
+            assert_eq!(keyword, Ok(Keywords::SegListBegin));
         }
 
         #[test]
         fn seg_item() {
-            let keyword = CTIKeywords::from_str("SEG 1000000000 4000000000 10");
+            let keyword = Keywords::from_str("SEG 1000000000 4000000000 10");
             match keyword {
-                Ok(CTIKeywords::SegItem{first, last, number}) => {
+                Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1000000000.);
                     assert_relative_eq!(last, 4000000000.);
                     assert_eq!(number, 10);
@@ -576,9 +576,9 @@ mod test_cti_keywords {
 
         #[test]
         fn seg_item_exponential() {
-            let keyword = CTIKeywords::from_str("SEG 1e9 1E4 100");
+            let keyword = Keywords::from_str("SEG 1e9 1E4 100");
             match keyword {
-                Ok(CTIKeywords::SegItem{first, last, number}) => {
+                Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1e9);
                     assert_relative_eq!(last, 1e4);
                     assert_eq!(number, 100);
@@ -589,9 +589,9 @@ mod test_cti_keywords {
 
         #[test]
         fn seg_item_negative() {
-            let keyword = CTIKeywords::from_str("SEG -1e9 1E-4 1");
+            let keyword = Keywords::from_str("SEG -1e9 1E-4 1");
             match keyword {
-                Ok(CTIKeywords::SegItem{first, last, number}) => {
+                Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, -1e9);
                     assert_relative_eq!(last, 1e-4);
                     assert_eq!(number, 1);
@@ -602,21 +602,21 @@ mod test_cti_keywords {
 
         #[test]
         fn seg_list_end() {
-            let keyword = CTIKeywords::from_str("SEG_LIST_END");
-            assert_eq!(keyword, Ok(CTIKeywords::SegListEnd));
+            let keyword = Keywords::from_str("SEG_LIST_END");
+            assert_eq!(keyword, Ok(Keywords::SegListEnd));
         }
 
         #[test]
         fn var_list_begin() {
-            let keyword = CTIKeywords::from_str("VAR_LIST_BEGIN");
-            assert_eq!(keyword, Ok(CTIKeywords::VarListBegin));
+            let keyword = Keywords::from_str("VAR_LIST_BEGIN");
+            assert_eq!(keyword, Ok(Keywords::VarListBegin));
         }
 
         #[test]
         fn var_item() {
-            let keyword = CTIKeywords::from_str("100000");
+            let keyword = Keywords::from_str("100000");
             match keyword {
-                Ok(CTIKeywords::VarListItem(value)) => {
+                Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, 100000.);
                 },
                 _ => panic!()
@@ -625,9 +625,9 @@ mod test_cti_keywords {
 
         #[test]
         fn var_item_exponential() {
-            let keyword = CTIKeywords::from_str("100E+6");
+            let keyword = Keywords::from_str("100E+6");
             match keyword {
-                Ok(CTIKeywords::VarListItem(value)) => {
+                Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, 100E+6);
                 },
                 _ => panic!()
@@ -636,9 +636,9 @@ mod test_cti_keywords {
 
         #[test]
         fn var_item_negative_exponential() {
-            let keyword = CTIKeywords::from_str("-1e-2");
+            let keyword = Keywords::from_str("-1e-2");
             match keyword {
-                Ok(CTIKeywords::VarListItem(value)) => {
+                Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, -1e-2);
                 },
                 _ => panic!()
@@ -647,9 +647,9 @@ mod test_cti_keywords {
 
         #[test]
         fn var_item_negative() {
-            let keyword = CTIKeywords::from_str("-100000");
+            let keyword = Keywords::from_str("-100000");
             match keyword {
-                Ok(CTIKeywords::VarListItem(value)) => {
+                Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, -100000.);
                 },
                 _ => panic!()
@@ -658,27 +658,27 @@ mod test_cti_keywords {
 
         #[test]
         fn var_list_end() {
-            let keyword = CTIKeywords::from_str("VAR_LIST_END");
-            assert_eq!(keyword, Ok(CTIKeywords::VarListEnd));
+            let keyword = Keywords::from_str("VAR_LIST_END");
+            assert_eq!(keyword, Ok(Keywords::VarListEnd));
         }
 
         #[test]
         fn data_s11() {
-            let keyword = CTIKeywords::from_str("DATA S[1,1] RI");
-            assert_eq!(keyword, Ok(CTIKeywords::Data{name: String::from("S[1,1]"), format: String::from("RI")}));
+            let keyword = Keywords::from_str("DATA S[1,1] RI");
+            assert_eq!(keyword, Ok(Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")}));
         }
 
         #[test]
         fn data_e() {
-            let keyword = CTIKeywords::from_str("DATA E RI");
-            assert_eq!(keyword, Ok(CTIKeywords::Data{name: String::from("E"), format: String::from("RI")}));
+            let keyword = Keywords::from_str("DATA E RI");
+            assert_eq!(keyword, Ok(Keywords::Data{name: String::from("E"), format: String::from("RI")}));
         }
 
         #[test]
         fn data_pair_simple() {
-            let keyword = CTIKeywords::from_str("1E9,-1E9");
+            let keyword = Keywords::from_str("1E9,-1E9");
             match keyword {
-                Ok(CTIKeywords::DataPair{real, imag}) => {
+                Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 1e9);
                     assert_relative_eq!(imag, -1e9);
                 },
@@ -688,9 +688,9 @@ mod test_cti_keywords {
 
         #[test]
         fn data_pair() {
-            let keyword = CTIKeywords::from_str("8.6303E-2,-8.98651E-1");
+            let keyword = Keywords::from_str("8.6303E-2,-8.98651E-1");
             match keyword {
-                Ok(CTIKeywords::DataPair{real, imag}) => {
+                Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
@@ -700,9 +700,9 @@ mod test_cti_keywords {
 
         #[test]
         fn data_pair_spaced() {
-            let keyword = CTIKeywords::from_str("8.6303E-2, -8.98651E-1");
+            let keyword = Keywords::from_str("8.6303E-2, -8.98651E-1");
             match keyword {
-                Ok(CTIKeywords::DataPair{real, imag}) => {
+                Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
@@ -712,20 +712,20 @@ mod test_cti_keywords {
 
         #[test]
         fn begin() {
-            let keyword = CTIKeywords::from_str("BEGIN");
-            assert_eq!(keyword, Ok(CTIKeywords::Begin));
+            let keyword = Keywords::from_str("BEGIN");
+            assert_eq!(keyword, Ok(Keywords::Begin));
         }
 
         #[test]
         fn end() {
-            let keyword = CTIKeywords::from_str("END");
-            assert_eq!(keyword, Ok(CTIKeywords::End));
+            let keyword = Keywords::from_str("END");
+            assert_eq!(keyword, Ok(Keywords::End));
         }
 
         #[test]
         fn comment() {
-            let keyword = CTIKeywords::from_str("!DATE: 2019.11.01");
-            assert_eq!(keyword, Ok(CTIKeywords::Comment(String::from("DATE: 2019.11.01"))));
+            let keyword = Keywords::from_str("!DATE: 2019.11.01");
+            assert_eq!(keyword, Ok(Keywords::Comment(String::from("DATE: 2019.11.01"))));
         }
     }
 
@@ -736,81 +736,81 @@ mod test_cti_keywords {
 
         #[test]
         fn fails_on_bad_string() {
-            let keyword = CTIKeywords::try_from("this is a bad string");
-            assert_eq!(keyword, Err(CTIParseError::BadKeyword(String::from("this is a bad string"))));
+            let keyword = Keywords::try_from("this is a bad string");
+            assert_eq!(keyword, Err(ParseError::BadKeyword(String::from("this is a bad string"))));
         }
 
         #[test]
         fn citifile_a_01_00() {
-            let keyword = CTIKeywords::try_from("CITIFILE A.01.00");
-            assert_eq!(keyword, Ok(CTIKeywords::CITIFile{version: String::from("A.01.00")}));
+            let keyword = Keywords::try_from("CITIFILE A.01.00");
+            assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.00")}));
         }
 
         #[test]
         fn citifile_a_01_01() {
-            let keyword = CTIKeywords::try_from("CITIFILE A.01.01");
-            assert_eq!(keyword, Ok(CTIKeywords::CITIFile{version: String::from("A.01.01")}));
+            let keyword = Keywords::try_from("CITIFILE A.01.01");
+            assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.01")}));
         }
 
         #[test]
         fn name_cal_set() {
-            let keyword = CTIKeywords::try_from("NAME CAL_SET");
-            assert_eq!(keyword, Ok(CTIKeywords::Name(String::from("CAL_SET"))));
+            let keyword = Keywords::try_from("NAME CAL_SET");
+            assert_eq!(keyword, Ok(Keywords::Name(String::from("CAL_SET"))));
         }
 
         #[test]
         fn name_raw_data() {
-            let keyword = CTIKeywords::try_from("NAME RAW_DATA");
-            assert_eq!(keyword, Ok(CTIKeywords::Name(String::from("RAW_DATA"))));
+            let keyword = Keywords::try_from("NAME RAW_DATA");
+            assert_eq!(keyword, Ok(Keywords::Name(String::from("RAW_DATA"))));
         }
 
         #[test]
         fn constant() {
-            let keyword = CTIKeywords::try_from("CONSTANT A_CONSTANT 1.2345");
-            assert_eq!(keyword, Ok(CTIKeywords::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")}));
+            let keyword = Keywords::try_from("CONSTANT A_CONSTANT 1.2345");
+            assert_eq!(keyword, Ok(Keywords::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")}));
         }
 
         #[test]
         fn device() {
-            let keyword = CTIKeywords::try_from("#NA REGISTER 1");
-            assert_eq!(keyword, Ok(CTIKeywords::Device{name: String::from("NA"), value: String::from("REGISTER 1")}));
+            let keyword = Keywords::try_from("#NA REGISTER 1");
+            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("NA"), value: String::from("REGISTER 1")}));
         }
 
         #[test]
         fn device_number() {
-            let keyword = CTIKeywords::try_from("#NA POWER2 1.0E1");
-            assert_eq!(keyword, Ok(CTIKeywords::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")}));
+            let keyword = Keywords::try_from("#NA POWER2 1.0E1");
+            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")}));
         }
 
         #[test]
         fn device_name() {
-            let keyword = CTIKeywords::try_from("#WVI A B");
-            assert_eq!(keyword, Ok(CTIKeywords::Device{name: String::from("WVI"), value: String::from("A B")}));
+            let keyword = Keywords::try_from("#WVI A B");
+            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("WVI"), value: String::from("A B")}));
         }
 
         #[test]
         fn var_standard() {
-            let keyword = CTIKeywords::try_from("VAR FREQ MAG 201");
-            assert_eq!(keyword, Ok(CTIKeywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 201}));
+            let keyword = Keywords::try_from("VAR FREQ MAG 201");
+            assert_eq!(keyword, Ok(Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 201}));
         }
 
         #[test]
         fn var_no_format() {
-            let keyword = CTIKeywords::try_from("VAR FREQ 202");
-            assert_eq!(keyword, Ok(CTIKeywords::Var{name: String::from("FREQ"), format: None, length: 202}));
+            let keyword = Keywords::try_from("VAR FREQ 202");
+            assert_eq!(keyword, Ok(Keywords::Var{name: String::from("FREQ"), format: None, length: 202}));
         }
 
         #[test]
         fn seg_list_begin() {
-            let keyword = CTIKeywords::try_from("SEG_LIST_BEGIN");
-            assert_eq!(keyword, Ok(CTIKeywords::SegListBegin));
+            let keyword = Keywords::try_from("SEG_LIST_BEGIN");
+            assert_eq!(keyword, Ok(Keywords::SegListBegin));
         }
 
         #[test]
         fn seg_item() {
-            let keyword = CTIKeywords::try_from("SEG 1000000000 4000000000 10");
+            let keyword = Keywords::try_from("SEG 1000000000 4000000000 10");
             match keyword {
-                Ok(CTIKeywords::SegItem{first, last, number}) => {
+                Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1000000000.);
                     assert_relative_eq!(last, 4000000000.);
                     assert_eq!(number, 10);
@@ -821,9 +821,9 @@ mod test_cti_keywords {
 
         #[test]
         fn seg_item_exponential() {
-            let keyword = CTIKeywords::try_from("SEG 1e9 1E4 100");
+            let keyword = Keywords::try_from("SEG 1e9 1E4 100");
             match keyword {
-                Ok(CTIKeywords::SegItem{first, last, number}) => {
+                Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1e9);
                     assert_relative_eq!(last, 1e4);
                     assert_eq!(number, 100);
@@ -834,9 +834,9 @@ mod test_cti_keywords {
 
         #[test]
         fn seg_item_negative() {
-            let keyword = CTIKeywords::try_from("SEG -1e9 1E-4 1");
+            let keyword = Keywords::try_from("SEG -1e9 1E-4 1");
             match keyword {
-                Ok(CTIKeywords::SegItem{first, last, number}) => {
+                Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, -1e9);
                     assert_relative_eq!(last, 1e-4);
                     assert_eq!(number, 1);
@@ -847,21 +847,21 @@ mod test_cti_keywords {
 
         #[test]
         fn seg_list_end() {
-            let keyword = CTIKeywords::try_from("SEG_LIST_END");
-            assert_eq!(keyword, Ok(CTIKeywords::SegListEnd));
+            let keyword = Keywords::try_from("SEG_LIST_END");
+            assert_eq!(keyword, Ok(Keywords::SegListEnd));
         }
 
         #[test]
         fn var_list_begin() {
-            let keyword = CTIKeywords::try_from("VAR_LIST_BEGIN");
-            assert_eq!(keyword, Ok(CTIKeywords::VarListBegin));
+            let keyword = Keywords::try_from("VAR_LIST_BEGIN");
+            assert_eq!(keyword, Ok(Keywords::VarListBegin));
         }
 
         #[test]
         fn var_item() {
-            let keyword = CTIKeywords::try_from("100000");
+            let keyword = Keywords::try_from("100000");
             match keyword {
-                Ok(CTIKeywords::VarListItem(value)) => {
+                Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, 100000.);
                 },
                 _ => panic!()
@@ -870,9 +870,9 @@ mod test_cti_keywords {
 
         #[test]
         fn var_item_exponential() {
-            let keyword = CTIKeywords::try_from("100E+6");
+            let keyword = Keywords::try_from("100E+6");
             match keyword {
-                Ok(CTIKeywords::VarListItem(value)) => {
+                Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, 100E+6);
                 },
                 _ => panic!()
@@ -881,9 +881,9 @@ mod test_cti_keywords {
 
         #[test]
         fn var_item_negative_exponential() {
-            let keyword = CTIKeywords::try_from("-1e-2");
+            let keyword = Keywords::try_from("-1e-2");
             match keyword {
-                Ok(CTIKeywords::VarListItem(value)) => {
+                Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, -1e-2);
                 },
                 _ => panic!()
@@ -892,9 +892,9 @@ mod test_cti_keywords {
 
         #[test]
         fn var_item_negative() {
-            let keyword = CTIKeywords::try_from("-100000");
+            let keyword = Keywords::try_from("-100000");
             match keyword {
-                Ok(CTIKeywords::VarListItem(value)) => {
+                Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, -100000.);
                 },
                 _ => panic!()
@@ -903,27 +903,27 @@ mod test_cti_keywords {
 
         #[test]
         fn var_list_end() {
-            let keyword = CTIKeywords::try_from("VAR_LIST_END");
-            assert_eq!(keyword, Ok(CTIKeywords::VarListEnd));
+            let keyword = Keywords::try_from("VAR_LIST_END");
+            assert_eq!(keyword, Ok(Keywords::VarListEnd));
         }
 
         #[test]
         fn data_s11() {
-            let keyword = CTIKeywords::try_from("DATA S[1,1] RI");
-            assert_eq!(keyword, Ok(CTIKeywords::Data{name: String::from("S[1,1]"), format: String::from("RI")}));
+            let keyword = Keywords::try_from("DATA S[1,1] RI");
+            assert_eq!(keyword, Ok(Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")}));
         }
 
         #[test]
         fn data_e() {
-            let keyword = CTIKeywords::try_from("DATA E RI");
-            assert_eq!(keyword, Ok(CTIKeywords::Data{name: String::from("E"), format: String::from("RI")}));
+            let keyword = Keywords::try_from("DATA E RI");
+            assert_eq!(keyword, Ok(Keywords::Data{name: String::from("E"), format: String::from("RI")}));
         }
 
         #[test]
         fn data_pair_simple() {
-            let keyword = CTIKeywords::try_from("1E9,-1E9");
+            let keyword = Keywords::try_from("1E9,-1E9");
             match keyword {
-                Ok(CTIKeywords::DataPair{real, imag}) => {
+                Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 1e9);
                     assert_relative_eq!(imag, -1e9);
                 },
@@ -933,9 +933,9 @@ mod test_cti_keywords {
 
         #[test]
         fn data_pair() {
-            let keyword = CTIKeywords::try_from("8.6303E-2,-8.98651E-1");
+            let keyword = Keywords::try_from("8.6303E-2,-8.98651E-1");
             match keyword {
-                Ok(CTIKeywords::DataPair{real, imag}) => {
+                Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
@@ -945,9 +945,9 @@ mod test_cti_keywords {
 
         #[test]
         fn data_pair_spaced() {
-            let keyword = CTIKeywords::try_from("8.6303E-2, -8.98651E-1");
+            let keyword = Keywords::try_from("8.6303E-2, -8.98651E-1");
             match keyword {
-                Ok(CTIKeywords::DataPair{real, imag}) => {
+                Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
@@ -957,33 +957,33 @@ mod test_cti_keywords {
 
         #[test]
         fn begin() {
-            let keyword = CTIKeywords::try_from("BEGIN");
-            assert_eq!(keyword, Ok(CTIKeywords::Begin));
+            let keyword = Keywords::try_from("BEGIN");
+            assert_eq!(keyword, Ok(Keywords::Begin));
         }
 
         #[test]
         fn end() {
-            let keyword = CTIKeywords::try_from("END");
-            assert_eq!(keyword, Ok(CTIKeywords::End));
+            let keyword = Keywords::try_from("END");
+            assert_eq!(keyword, Ok(Keywords::End));
         }
 
         #[test]
         fn comment() {
-            let keyword = CTIKeywords::try_from("!DATE: 2019.11.01");
-            assert_eq!(keyword, Ok(CTIKeywords::Comment(String::from("DATE: 2019.11.01"))));
+            let keyword = Keywords::try_from("!DATE: 2019.11.01");
+            assert_eq!(keyword, Ok(Keywords::Comment(String::from("DATE: 2019.11.01"))));
         }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CTIDevice {
+pub struct Device {
     pub name: String,
     pub entries: Vec<String>,
 }
 
-impl CTIDevice {
-    pub fn new(name: &str) -> CTIDevice {
-        CTIDevice {
+impl Device {
+    pub fn new(name: &str) -> Device {
+        Device {
             name: String::from(name),
             entries: vec![],
         }
@@ -991,35 +991,35 @@ impl CTIDevice {
 }
 
 #[cfg(test)]
-mod test_cti_device {
+mod test_device {
     use super::*;
 
     #[test]
     fn test_new() {
-        let result = CTIDevice::new("A Name");
-        let expected = CTIDevice {name: String::from("A Name"), entries: vec![]};
+        let result = Device::new("A Name");
+        let expected = Device {name: String::from("A Name"), entries: vec![]};
         assert_eq!(result, expected);
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CTIVar {
+pub struct Var {
     pub name: Option<String>,
     pub format: Option<String>,
     pub data: Vec<f64>,
 }
 
-impl CTIVar {
-    fn blank() -> CTIVar {
-        CTIVar {
+impl Var {
+    fn blank() -> Var {
+        Var {
             name: None,
             format: None,
             data: vec![],
         }
     }
 
-    pub fn new(name: &str, format: Option<String>) -> CTIVar {
-        CTIVar {
+    pub fn new(name: &str, format: Option<String>) -> Var {
+        Var {
             name: Some(String::from(name)),
             format: format,
             data: vec![],
@@ -1045,20 +1045,20 @@ impl CTIVar {
 }
 
 #[cfg(test)]
-mod test_cti_var {
+mod test_var {
     use super::*;
 
     #[test]
     fn test_blank() {
-        let result = CTIVar::blank();
-        let expected = CTIVar {name: None, format: None, data: vec![]};
+        let result = Var::blank();
+        let expected = Var {name: None, format: None, data: vec![]};
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_new() {
-        let result = CTIVar::new("Name", None);
-        let expected = CTIVar {name: Some(String::from("Name")), format: None, data: vec![]};
+        let result = Var::new("Name", None);
+        let expected = Var {name: Some(String::from("Name")), format: None, data: vec![]};
         assert_eq!(result, expected);
     }
 
@@ -1067,14 +1067,14 @@ mod test_cti_var {
 
         #[test]
         fn empty() {
-            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            let mut var = Var {name: None, format: None, data: vec![]};
             var.push(1.);
             assert_eq!(vec![1.], var.data);
         }
 
         #[test]
         fn double() {
-            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            let mut var = Var {name: None, format: None, data: vec![]};
             var.push(1.);
             var.push(2.);
             assert_eq!(vec![1., 2.], var.data);
@@ -1082,7 +1082,7 @@ mod test_cti_var {
 
         #[test]
         fn existing() {
-            let mut var = CTIVar {name: None, format: None, data: vec![1.]};
+            let mut var = Var {name: None, format: None, data: vec![1.]};
             var.push(2.);
             assert_eq!(vec![1., 2.], var.data);
         }
@@ -1093,35 +1093,35 @@ mod test_cti_var {
 
         #[test]
         fn number_zero() {
-            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            let mut var = Var {name: None, format: None, data: vec![]};
             var.seq(1., 2., 0);
             assert_eq!(Vec::<f64>::new(), var.data);
         }
 
         #[test]
         fn number_one() {
-            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            let mut var = Var {name: None, format: None, data: vec![]};
             var.seq(10., 20., 1);
             assert_eq!(vec![10.], var.data);
         }
 
         #[test]
         fn simple() {
-            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            let mut var = Var {name: None, format: None, data: vec![]};
             var.seq(1., 2., 2);
             assert_eq!(vec![1., 2.], var.data);
         }
 
         #[test]
         fn triple() {
-            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            let mut var = Var {name: None, format: None, data: vec![]};
             var.seq(2000000000., 3000000000., 3);
             assert_eq!(vec![2000000000., 2500000000., 3000000000.], var.data);
         }
 
         #[test]
         fn reversed() {
-            let mut var = CTIVar {name: None, format: None, data: vec![]};
+            let mut var = Var {name: None, format: None, data: vec![]};
             var.seq(3000000000., 2000000000., 3);
             assert_eq!(vec![3000000000., 2500000000., 2000000000.], var.data);
         }
@@ -1129,14 +1129,14 @@ mod test_cti_var {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CTIConstant {
+pub struct Constant {
     pub name: String,
     pub value: String,
 }
 
-impl CTIConstant {
-    pub fn new(name: &str, value: &str) -> CTIConstant {
-        CTIConstant {
+impl Constant {
+    pub fn new(name: &str, value: &str) -> Constant {
+        Constant {
             name: String::from(name),
             value: String::from(value),
         }
@@ -1144,62 +1144,62 @@ impl CTIConstant {
 }
 
 #[cfg(test)]
-mod test_cti_constant {
+mod test_constant {
     use super::*;
 
     #[test]
     fn test_new() {
-        let expected = CTIConstant {
+        let expected = Constant {
             name: String::from("A_NAME"),
             value: String::from("A_VALUE"),
         };
-        let result = CTIConstant::new("A_NAME", "A_VALUE");
+        let result = Constant::new("A_NAME", "A_VALUE");
         assert_eq!(result, expected);
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CTIHeader {
+pub struct Header {
     pub version: Option<String>,
     pub name: Option<String>,
     pub comments: Vec<String>,
-    pub devices: Vec<CTIDevice>,
-    pub independent_variable: CTIVar,
-    pub constants: Vec<CTIConstant>,
+    pub devices: Vec<Device>,
+    pub independent_variable: Var,
+    pub constants: Vec<Constant>,
 }
 
-impl Default for CTIHeader {
+impl Default for Header {
     fn default() -> Self {
-        CTIHeader {
+        Header {
             version: Some(String::from("A.01.00")),
             name: Some(String::from("Name")),
             comments: vec![],
             devices: vec![],
-            independent_variable: CTIVar::blank(),
+            independent_variable: Var::blank(),
             constants: vec![],
         }
     }
 }
 
-impl CTIHeader {
-    pub fn new(version: &str, name: &str) -> CTIHeader {
-        CTIHeader {
+impl Header {
+    pub fn new(version: &str, name: &str) -> Header {
+        Header {
             version: Some(String::from(version)),
             name: Some(String::from(name)),
             comments: vec![],
             devices: vec![],
-            independent_variable: CTIVar::blank(),
+            independent_variable: Var::blank(),
             constants: vec![],
         }
     }
 
-    fn blank() -> CTIHeader {
-        CTIHeader {
+    fn blank() -> Header {
+        Header {
             version: None,
             name: None,
             comments: vec![],
             devices: vec![],
-            independent_variable: CTIVar::blank(),
+            independent_variable: Var::blank(),
             constants: vec![],
         }
     }
@@ -1215,11 +1215,11 @@ impl CTIHeader {
     /// If the device already exists, nothing happens
     pub fn create_device(&mut self, device_name: &str) {
         if self.get_device_by_name(device_name) == None {
-            self.devices.push(CTIDevice::new(device_name));
+            self.devices.push(Device::new(device_name));
         }
     }
 
-    pub fn get_device_by_name(&self, device_name: &str) -> Option<&CTIDevice> {
+    pub fn get_device_by_name(&self, device_name: &str) -> Option<&Device> {
         self.devices.iter().find(|&x| x.name == device_name)
     }
 
@@ -1229,34 +1229,34 @@ impl CTIHeader {
 }
 
 #[cfg(test)]
-mod test_cti_header {
+mod test_header {
     use super::*;
 
     #[test]
     fn test_default() {
-        let expected = CTIHeader {
+        let expected = Header {
             version: Some(String::from("A.01.00")),
             name: Some(String::from("Name")),
             comments: vec![],
             devices: vec![],
-            independent_variable: CTIVar {name: None, format: None, data: vec![]},
+            independent_variable: Var {name: None, format: None, data: vec![]},
             constants: vec![],
         };
-        let result = CTIHeader::default();
+        let result = Header::default();
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_new() {
-        let expected = CTIHeader {
+        let expected = Header {
             version: Some(String::from("A.01.01")),
             name: Some(String::from("A_NAME")),
             comments: vec![],
             devices: vec![],
-            independent_variable: CTIVar {name: None, format: None, data: vec![]},
+            independent_variable: Var {name: None, format: None, data: vec![]},
             constants: vec![],
         };
-        let result = CTIHeader::new("A.01.01", "A_NAME");
+        let result = Header::new("A.01.01", "A_NAME");
         assert_eq!(result, expected);
     }
 
@@ -1270,16 +1270,16 @@ mod test_cti_header {
 
             #[test]
             fn empty() {
-                let expected = vec![CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]}];
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let expected = vec![Device{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]}];
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.add_device("NA", "VERSION HP8510B.05.00");
                 assert_eq!(header.devices, expected);
             }
 
             #[test]
             fn double_add() {
-                let expected = vec![CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00"), String::from("REGISTER 1")]}];
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let expected = vec![Device{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00"), String::from("REGISTER 1")]}];
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.add_device("NA", "VERSION HP8510B.05.00");
                 header.add_device("NA", "REGISTER 1");
                 assert_eq!(header.devices, expected);
@@ -1288,10 +1288,10 @@ mod test_cti_header {
             #[test]
             fn add_two_devices() {
                 let expected = vec![
-                    CTIDevice{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]},
-                    CTIDevice{name: String::from("WVI"), entries: vec![String::from("REGISTER 1")]},
+                    Device{name: String::from("NA"), entries: vec![String::from("VERSION HP8510B.05.00")]},
+                    Device{name: String::from("WVI"), entries: vec![String::from("REGISTER 1")]},
                 ];
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.add_device("NA", "VERSION HP8510B.05.00");
                 header.add_device("WVI", "REGISTER 1");
                 assert_eq!(header.devices, expected);
@@ -1304,16 +1304,16 @@ mod test_cti_header {
 
             #[test]
             fn empty() {
-                let expected = vec![CTIDevice{name: String::from("A Name"), entries: vec![]}];
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let expected = vec![Device{name: String::from("A Name"), entries: vec![]}];
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.create_device("A Name");
                 assert_eq!(header.devices, expected);
             }
 
             #[test]
             fn appends_device() {
-                let expected = vec![CTIDevice{name: String::from("Different Name"), entries: vec![]}, CTIDevice{name: String::from("A Name"), entries: vec![]}];
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let expected = vec![Device{name: String::from("Different Name"), entries: vec![]}, Device{name: String::from("A Name"), entries: vec![]}];
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.create_device("Different Name");
                 header.create_device("A Name");
                 assert_eq!(header.devices, expected);
@@ -1321,8 +1321,8 @@ mod test_cti_header {
 
             #[test]
             fn existing_device() {
-                let expected = vec![CTIDevice{name: String::from("A Name"), entries: vec![]}];
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let expected = vec![Device{name: String::from("A Name"), entries: vec![]}];
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.create_device("A Name");
                 header.create_device("A Name");
                 assert_eq!(header.devices, expected);
@@ -1335,20 +1335,20 @@ mod test_cti_header {
 
             #[test]
             fn empty() {
-                let header = CTIHeader::new("A.01.01", "A_NAME");
+                let header = Header::new("A.01.01", "A_NAME");
                 assert_eq!(header.index_device(""), None);
             }
 
             #[test]
             fn no_device_found() {
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.create_device("A Name");
                 assert_eq!(header.index_device(""), None);
             }
 
             #[test]
             fn device_found() {
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.create_device("A Name");
                 assert_eq!(header.index_device("A Name"), Some(0));
             }
@@ -1360,22 +1360,22 @@ mod test_cti_header {
 
             #[test]
             fn empty() {
-                let header = CTIHeader::new("A.01.01", "A_NAME");
+                let header = Header::new("A.01.01", "A_NAME");
                 assert_eq!(header.get_device_by_name(""), None);
             }
 
             #[test]
             fn no_device_found() {
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.create_device("A Name");
                 assert_eq!(header.get_device_by_name(""), None);
             }
 
             #[test]
             fn device_found() {
-                let mut header = CTIHeader::new("A.01.01", "A_NAME");
+                let mut header = Header::new("A.01.01", "A_NAME");
                 header.create_device("A Name");
-                assert_eq!(header.get_device_by_name("A Name"), Some(&CTIDevice{name: String::from("A Name"), entries: vec![]}));
+                assert_eq!(header.get_device_by_name("A Name"), Some(&Device{name: String::from("A Name"), entries: vec![]}));
             }
         }
     }
@@ -1383,17 +1383,17 @@ mod test_cti_header {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CTIDataArray {
+pub struct DataArray {
     pub name: Option<String>,
     pub format: Option<String>,
     pub real: Vec<f64>,
     pub imag: Vec<f64>,
 }
 
-impl CTIDataArray {
+impl DataArray {
     #[cfg(test)]
-    fn blank() -> CTIDataArray {
-        CTIDataArray {
+    fn blank() -> DataArray {
+        DataArray {
             name: None,
             format: None,
             real: vec![],
@@ -1401,8 +1401,8 @@ impl CTIDataArray {
         }
     }
 
-    pub fn new(name: &str, format: &str) -> CTIDataArray {
-        CTIDataArray {
+    pub fn new(name: &str, format: &str) -> DataArray {
+        DataArray {
             name: Some(String::from(name)),
             format: Some(String::from(format)),
             real: vec![],
@@ -1417,20 +1417,20 @@ impl CTIDataArray {
 }
 
 #[cfg(test)]
-mod test_cti_data_array {
+mod test_data_array {
     use super::*;
 
     #[test]
     fn test_blank() {
-        let expected = CTIDataArray {name: None, format: None, real: vec![], imag: vec![]};
-        let result = CTIDataArray::blank();
+        let expected = DataArray {name: None, format: None, real: vec![], imag: vec![]};
+        let result = DataArray::blank();
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_new() {
-        let expected = CTIDataArray {name: Some(String::from("S")), format: Some(String::from("RI")), real: vec![], imag: vec![]};
-        let result = CTIDataArray::new("S", "RI");
+        let expected = DataArray {name: Some(String::from("S")), format: Some(String::from("RI")), real: vec![], imag: vec![]};
+        let result = DataArray::new("S", "RI");
         assert_eq!(result, expected);
     }
 
@@ -1440,7 +1440,7 @@ mod test_cti_data_array {
 
         #[test]
         fn empty() {
-            let mut result = CTIDataArray {name: None, format: None, real: vec![], imag: vec![]};
+            let mut result = DataArray {name: None, format: None, real: vec![], imag: vec![]};
             result.add_sample(1., 2.);
             assert_eq!(result.real, vec![1.]);
             assert_eq!(result.imag, vec![2.]);
@@ -1448,7 +1448,7 @@ mod test_cti_data_array {
 
         #[test]
         fn double() {
-            let mut result = CTIDataArray {name: None, format: None, real: vec![], imag: vec![]};
+            let mut result = DataArray {name: None, format: None, real: vec![], imag: vec![]};
             result.add_sample(1., 2.);
             result.add_sample(-1., -2.);
             assert_eq!(result.real, vec![1., -1.]);
@@ -1457,7 +1457,7 @@ mod test_cti_data_array {
 
         #[test]
         fn existing() {
-            let mut result = CTIDataArray {name: None, format: None, real: vec![1.], imag: vec![2.]};
+            let mut result = DataArray {name: None, format: None, real: vec![1.], imag: vec![2.]};
             result.add_sample(3., 4.);
             assert_eq!(result.real, vec![1., 3.]);
             assert_eq!(result.imag, vec![2., 4.]);
@@ -1466,22 +1466,22 @@ mod test_cti_data_array {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CTIFile {
-    pub header: CTIHeader,
-    pub data: Vec<CTIDataArray>,
+pub struct Record {
+    pub header: Header,
+    pub data: Vec<DataArray>,
 }
 
-impl Default for CTIFile {
+impl Default for Record {
     fn default() -> Self {
-        CTIFile {
-            header: CTIHeader::default(),
+        Record {
+            header: Header::default(),
             data: vec![],
         }
     }
 }
 
 #[derive(Error, Debug, PartialEq)]
-pub enum CTIValidFileError {
+pub enum ValidRecordError {
     #[error("Version is not defined")]
     NoVersion,
     #[error("Name is not defined")]
@@ -1495,10 +1495,10 @@ pub enum CTIValidFileError {
     #[error("Data array {2} has different length real and imaginary components ({0} != {1})")]
     RealImagDoNotMatch(usize, usize, usize),
 }
-type CTIValidFileResult<T> = std::result::Result<T, CTIValidFileError>;
+type ValidRecordResult<T> = std::result::Result<T, ValidRecordError>;
 
 #[cfg(test)]
-mod test_cti_valid_file_error {
+mod test_valid_file_error {
     use super::*;
 
     mod test_display {
@@ -1506,61 +1506,61 @@ mod test_cti_valid_file_error {
 
         #[test]
         fn no_version() {
-            let error = CTIValidFileError::NoVersion;
+            let error = ValidRecordError::NoVersion;
             assert_eq!(format!("{}", error), "Version is not defined");
         }
 
         #[test]
         fn no_name() {
-            let error = CTIValidFileError::NoName;
+            let error = ValidRecordError::NoName;
             assert_eq!(format!("{}", error), "Name is not defined");
         }
 
         #[test]
         fn no_independent_variable() {
-            let error = CTIValidFileError::NoIndependentVariable;
+            let error = ValidRecordError::NoIndependentVariable;
             assert_eq!(format!("{}", error), "Indepent variable is not defined");
         }
 
         #[test]
         fn no_data() {
-            let error = CTIValidFileError::NoData;
+            let error = ValidRecordError::NoData;
             assert_eq!(format!("{}", error), "Data name and format is not defined");
         }
 
         #[test]
         fn var_and_data() {
-            let error = CTIValidFileError::VarAndDataDifferentLengths(1, 2, 3);
+            let error = ValidRecordError::VarAndDataDifferentLengths(1, 2, 3);
             assert_eq!(format!("{}", error), "Independent variable and data array 3 are different lengths (1 != 2)");
         }
 
         #[test]
         fn data_real_imag_do_not_match() {
-            let error = CTIValidFileError::RealImagDoNotMatch(1, 2, 0);
+            let error = ValidRecordError::RealImagDoNotMatch(1, 2, 0);
             assert_eq!(format!("{}", error), "Data array 0 has different length real and imaginary components (1 != 2)");
         }
     }
 }
 
-impl CTIFile {
-    pub fn new(version: &str, name: &str) -> CTIFile {
-        CTIFile {
-            header: CTIHeader::new(version, name),
+impl Record {
+    pub fn new(version: &str, name: &str) -> Record {
+        Record {
+            header: Header::new(version, name),
             data: vec![],
         }
     }
 
-    pub fn read<P: AsRef<Path>>(path: &P)  -> CTIResult<CTIFile> {
-        let contents = std::fs::read_to_string(path).map_err(|_| CTIReaderError::CannotOpen(path.as_ref().to_path_buf()))?;
-        CTIFile::read_str(&contents)
+    pub fn read<P: AsRef<Path>>(path: &P)  -> Result<Record> {
+        let contents = std::fs::read_to_string(path).map_err(|_| ReaderError::CannotOpen(path.as_ref().to_path_buf()))?;
+        Record::read_str(&contents)
     }
 
-    fn read_str(contents: &str) -> CTIResult<CTIFile> {
-        let mut state = CTIFileReaderState::new();
+    fn read_str(contents: &str) -> Result<Record> {
+        let mut state = RecordReaderState::new();
         for (i, line) in contents.lines().enumerate() {
             // Filter out new lines
             if line.len() > 0 {
-                let keyword = CTIKeywords::try_from(line).map_err(|e| CTIReaderError::LineError(i, e))?;
+                let keyword = Keywords::try_from(line).map_err(|e| ReaderError::LineError(i, e))?;
                 state = state.process_keyword(keyword)?;
             }
         }
@@ -1568,14 +1568,14 @@ impl CTIFile {
     }
 
     #[cfg(test)]
-    fn blank() -> CTIFile {
-        CTIFile {
-            header: CTIHeader::blank(),
+    fn blank() -> Record {
+        Record {
+            header: Header::blank(),
             data: vec![],
         }
     }
 
-    pub fn validate_file(self) -> CTIValidFileResult<Self> {
+    pub fn validate_file(self) -> ValidRecordResult<Self> {
         self.has_name()?
             .has_version()?
             .has_var()?
@@ -1584,36 +1584,36 @@ impl CTIFile {
             .data_real_image_same_length()
     }
 
-    fn has_version(self) -> CTIValidFileResult<Self> {
+    fn has_version(self) -> ValidRecordResult<Self> {
         match self.header.version {
             Some(_) => Ok(self),
-            None => Err(CTIValidFileError::NoVersion),
+            None => Err(ValidRecordError::NoVersion),
         }
     }
 
-    fn has_name(self) -> CTIValidFileResult<Self> {
+    fn has_name(self) -> ValidRecordResult<Self> {
         match self.header.name {
             Some(_) => Ok(self),
-            None => Err(CTIValidFileError::NoName),
+            None => Err(ValidRecordError::NoName),
         }
     }
 
-    fn has_var(self) -> CTIValidFileResult<Self> {
+    fn has_var(self) -> ValidRecordResult<Self> {
         match self.header.independent_variable.name {
             Some(_) => Ok(self),
-            None => Err(CTIValidFileError::NoIndependentVariable),
+            None => Err(ValidRecordError::NoIndependentVariable),
         }
     }
 
-    fn has_data(self) -> CTIValidFileResult<Self> {
+    fn has_data(self) -> ValidRecordResult<Self> {
         match self.data.len() {
-            0 => Err(CTIValidFileError::NoData),
+            0 => Err(ValidRecordError::NoData),
             _ => Ok(self),
         }
     }
 
     /// Zero length var with variable length data allowed
-    fn var_and_data_same_length(self) -> CTIValidFileResult<Self> {
+    fn var_and_data_same_length(self) -> ValidRecordResult<Self> {
         let mut n = self.header.independent_variable.data.len();
 
         for (i, data_array) in self.data.iter().enumerate() {
@@ -1622,20 +1622,20 @@ impl CTIFile {
                 n = k
             } else {
                 if n != k {
-                    return Err(CTIValidFileError::VarAndDataDifferentLengths(n, k, i))
+                    return Err(ValidRecordError::VarAndDataDifferentLengths(n, k, i))
                 }
             }
         }
         Ok(self)
     }
 
-    fn data_real_image_same_length(self) -> CTIValidFileResult<Self> {
+    fn data_real_image_same_length(self) -> ValidRecordResult<Self> {
         for (i, data_array) in self.data.iter().enumerate() {
             let real_size = data_array.real.len();
             let imag_size = data_array.imag.len();
 
             if real_size != imag_size {
-                return Err(CTIValidFileError::RealImagDoNotMatch(real_size, imag_size, i));
+                return Err(ValidRecordError::RealImagDoNotMatch(real_size, imag_size, i));
             }
         }
         Ok(self)
@@ -1643,7 +1643,7 @@ impl CTIFile {
 }
 
 #[cfg(test)]
-mod test_cti_file {
+mod test_file {
     use super::*;
 
     #[cfg(test)]
@@ -1653,16 +1653,16 @@ mod test_cti_file {
 
         #[test]
         fn cannot_read_empty_file() {
-            let expected = Err(CTIError::ValidFileError(CTIValidFileError::NoName));
+            let expected = Err(Error::ValidRecordError(ValidRecordError::NoName));
             let contents = "";
-            let result = CTIFile::read_str(contents);
+            let result = Record::read_str(contents);
             assert_eq!(expected, result);
         }
 
         #[test]
         fn succeed_on_multiple_new_lines() {
             let contents = "CITIFILE A.01.00\nNAME MEMORY\n\n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-            match CTIFile::read_str(contents) {
+            match Record::read_str(contents) {
                 Ok(_) => (),
                 Err(_) => panic!("Cannot parse when there are multiple blank lines"),
             }
@@ -1672,9 +1672,9 @@ mod test_cti_file {
         mod test_read_minimal_file {
             use super::*;
 
-            fn setup() -> CTIResult<CTIFile> {
+            fn setup() -> Result<Record> {
                 let contents = "CITIFILE A.01.00\nNAME MEMORY\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-                CTIFile::read_str(contents)
+                Record::read_str(contents)
             }
 
             #[test]
@@ -1755,11 +1755,11 @@ mod test_cti_file {
     mod test_validate_file {
         use super::*;
 
-        fn create_valid_file() -> CTIFile {
-            let mut file = CTIFile::blank();
+        fn create_valid_file() -> Record {
+            let mut file = Record::blank();
             file.header.name = Some(String::from("CAL_SET"));
             file.header.version = Some(String::from("A.01.00"));
-            file.data.push(CTIDataArray::new("E", "RI"));
+            file.data.push(DataArray::new("E", "RI"));
             file.header.independent_variable.name = Some(String::from("FREQ"));
             file
         }
@@ -1774,48 +1774,48 @@ mod test_cti_file {
         fn test_no_data() {
             let mut file = create_valid_file();
             file.data = vec![];
-            assert_eq!(Err(CTIValidFileError::NoData), file.validate_file());
+            assert_eq!(Err(ValidRecordError::NoData), file.validate_file());
         }
 
         #[test]
         fn test_no_version() {
             let mut file = create_valid_file();
             file.header.version = None;
-            assert_eq!(Err(CTIValidFileError::NoVersion), file.validate_file());
+            assert_eq!(Err(ValidRecordError::NoVersion), file.validate_file());
         }
 
         #[test]
         fn test_no_name() {
             let mut file = create_valid_file();
             file.header.name = None;
-            assert_eq!(Err(CTIValidFileError::NoName), file.validate_file());
+            assert_eq!(Err(ValidRecordError::NoName), file.validate_file());
         }
 
         #[test]
         fn test_no_var() {
             let mut file = create_valid_file();
             file.header.independent_variable.name = None;
-            assert_eq!(Err(CTIValidFileError::NoIndependentVariable), file.validate_file());
+            assert_eq!(Err(ValidRecordError::NoIndependentVariable), file.validate_file());
         }
 
         #[test]
         fn test_var_and_data_different() {
             let mut file = create_valid_file();
             file.header.independent_variable.data = vec![1.];
-            assert_eq!(Err(CTIValidFileError::VarAndDataDifferentLengths(1, 0, 0)), file.validate_file());
+            assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 0, 0)), file.validate_file());
         }
 
         #[test]
         fn test_real_imag_do_not_match() {
             let mut file = create_valid_file();
-            file.data[0] = CTIDataArray{
+            file.data[0] = DataArray{
                 name: None,
                 format: None,
                 real: vec![1., 2., 3.],
                 imag: vec![1., 2., 3., 4.],
             };
             file.header.independent_variable.data = vec![1., 2., 3.];
-            assert_eq!(Err(CTIValidFileError::RealImagDoNotMatch(3, 4, 0)), file.validate_file());
+            assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 4, 0)), file.validate_file());
         }
 
         #[cfg(test)]
@@ -1824,16 +1824,16 @@ mod test_cti_file {
 
             #[test]
             fn fail_on_no_version() {
-                let file = CTIFile::blank();
-                assert_eq!(Err(CTIValidFileError::NoData), file.has_data());
+                let file = Record::blank();
+                assert_eq!(Err(ValidRecordError::NoData), file.has_data());
             }
 
             #[test]
             fn pass_on_name() {
-                let mut expected = CTIFile::blank();
-                expected.data.push(CTIDataArray::new("E", "RI"));
-                let mut file = CTIFile::blank();
-                file.data.push(CTIDataArray::new("E", "RI"));
+                let mut expected = Record::blank();
+                expected.data.push(DataArray::new("E", "RI"));
+                let mut file = Record::blank();
+                file.data.push(DataArray::new("E", "RI"));
                 assert_eq!(Ok(expected), file.has_data());
             }
         }
@@ -1844,15 +1844,15 @@ mod test_cti_file {
 
             #[test]
             fn fail_on_no_version() {
-                let file = CTIFile::blank();
-                assert_eq!(Err(CTIValidFileError::NoIndependentVariable), file.has_var());
+                let file = Record::blank();
+                assert_eq!(Err(ValidRecordError::NoIndependentVariable), file.has_var());
             }
 
             #[test]
             fn pass_on_name() {
-                let mut expected = CTIFile::blank();
+                let mut expected = Record::blank();
                 expected.header.independent_variable.name = Some(String::from("FREQ"));
-                let mut file = CTIFile::blank();
+                let mut file = Record::blank();
                 file.header.independent_variable.name = Some(String::from("FREQ"));
                 assert_eq!(Ok(expected), file.has_var());
             }
@@ -1864,15 +1864,15 @@ mod test_cti_file {
 
             #[test]
             fn fail_on_no_version() {
-                let file = CTIFile::blank();
-                assert_eq!(Err(CTIValidFileError::NoVersion), file.has_version());
+                let file = Record::blank();
+                assert_eq!(Err(ValidRecordError::NoVersion), file.has_version());
             }
 
             #[test]
             fn pass_on_name() {
-                let mut expected = CTIFile::blank();
+                let mut expected = Record::blank();
                 expected.header.version = Some(String::from("A.01.00"));
-                let mut file = CTIFile::blank();
+                let mut file = Record::blank();
                 file.header.version = Some(String::from("A.01.00"));
                 assert_eq!(Ok(expected), file.has_version());
             }
@@ -1884,15 +1884,15 @@ mod test_cti_file {
 
             #[test]
             fn fail_on_no_name() {
-                let file = CTIFile::blank();
-                assert_eq!(Err(CTIValidFileError::NoName), file.has_name());
+                let file = Record::blank();
+                assert_eq!(Err(ValidRecordError::NoName), file.has_name());
             }
 
             #[test]
             fn pass_on_name() {
-                let mut expected = CTIFile::blank();
+                let mut expected = Record::blank();
                 expected.header.name = Some(String::from("CAL_SET"));
-                let mut file = CTIFile::blank();
+                let mut file = Record::blank();
                 file.header.name = Some(String::from("CAL_SET"));
                 assert_eq!(Ok(expected), file.has_name());
             }
@@ -1904,14 +1904,14 @@ mod test_cti_file {
 
             #[test]
             fn pass_on_blank() {
-                let file = CTIFile::blank();
-                assert_eq!(Ok(CTIFile::blank()), file.var_and_data_same_length());
+                let file = Record::blank();
+                assert_eq!(Ok(Record::blank()), file.var_and_data_same_length());
             }
 
             #[test]
             fn pass_on_equal() {
-                let mut file = CTIFile::blank();
-                file.data.push(CTIDataArray{
+                let mut file = Record::blank();
+                file.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1.],
@@ -1923,8 +1923,8 @@ mod test_cti_file {
 
             #[test]
             fn pass_on_var_zero_data_some() {
-                let mut file = CTIFile::blank();
-                file.data.push(CTIDataArray{
+                let mut file = Record::blank();
+                file.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2.],
@@ -1935,34 +1935,34 @@ mod test_cti_file {
 
             #[test]
             fn fail_on_var_one_data_some() {
-                let mut file = CTIFile::blank();
-                file.data.push(CTIDataArray{
+                let mut file = Record::blank();
+                file.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2.],
                     imag: vec![1., 2.],
                 });
                 file.header.independent_variable.data = vec![1.];
-                assert_eq!(Err(CTIValidFileError::VarAndDataDifferentLengths(1, 2, 0)), file.var_and_data_same_length());
+                assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 0)), file.var_and_data_same_length());
             }
 
             #[test]
             fn error_formatted_correctely() {
-                let mut file = CTIFile::blank();
-                file.data.push(CTIDataArray{
+                let mut file = Record::blank();
+                file.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1.],
                     imag: vec![1.],
                 });
-                file.data.push(CTIDataArray{
+                file.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2.],
                     imag: vec![1., 2.],
                 });
                 file.header.independent_variable.data = vec![1.];
-                assert_eq!(Err(CTIValidFileError::VarAndDataDifferentLengths(1, 2, 1)), file.var_and_data_same_length());
+                assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 1)), file.var_and_data_same_length());
             }
         }
 
@@ -1972,44 +1972,44 @@ mod test_cti_file {
 
             #[test]
             fn fail_on_different_double_array() {
-                let mut file = CTIFile::blank();
-                file.data.push(CTIDataArray{
+                let mut file = Record::blank();
+                file.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![],
                     imag: vec![],
                 });
-                file.data.push(CTIDataArray{
+                file.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2., 3.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Err(CTIValidFileError::RealImagDoNotMatch(3, 2, 1)), file.data_real_image_same_length());
+                assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 2, 1)), file.data_real_image_same_length());
             }
 
             #[test]
             fn fail_on_different() {
-                let mut file = CTIFile::blank();
-                file.data.push(CTIDataArray{
+                let mut file = Record::blank();
+                file.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2., 3.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Err(CTIValidFileError::RealImagDoNotMatch(3, 2, 0)), file.data_real_image_same_length());
+                assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 2, 0)), file.data_real_image_same_length());
             }
 
             #[test]
             fn pass_on_empty() {
-                let file = CTIFile::blank();
+                let file = Record::blank();
                 assert_eq!(Ok(file.clone()), file.data_real_image_same_length());
             }
 
             #[test]
             fn pass_on_equal() {
-                let mut file = CTIFile::blank();
-                file.data.push(CTIDataArray{
+                let mut file = Record::blank();
+                file.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2.],
@@ -2022,75 +2022,75 @@ mod test_cti_file {
 
     #[test]
     fn test_default() {
-        let expected = CTIFile {
-            header: CTIHeader {
+        let expected = Record {
+            header: Header {
                 version: Some(String::from("A.01.00")),
                 name: Some(String::from("Name")),
                 comments: vec![],
                 devices: vec![],
-                independent_variable: CTIVar {name: None, format: None, data: vec![]},
+                independent_variable: Var {name: None, format: None, data: vec![]},
                 constants: vec![],
             },
             data: vec![],
         };
-        let result = CTIFile::default();
+        let result = Record::default();
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_new() {
-        let expected = CTIFile {
-            header: CTIHeader {
+        let expected = Record {
+            header: Header {
                 version: Some(String::from("A.01.01")),
                 name: Some(String::from("A_NAME")),
                 comments: vec![],
                 devices: vec![],
-                independent_variable: CTIVar {name: None, format: None, data: vec![]},
+                independent_variable: Var {name: None, format: None, data: vec![]},
                 constants: vec![],
             },
             data: vec![],
         };
-        let result = CTIFile::new("A.01.01", "A_NAME");
+        let result = Record::new("A.01.01", "A_NAME");
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_blank() {
-        let expected = CTIFile {
-            header: CTIHeader {
+        let expected = Record {
+            header: Header {
                 version: None,
                 name: None,
                 comments: vec![],
                 devices: vec![],
-                independent_variable: CTIVar {name: None, format: None, data: vec![]},
+                independent_variable: Var {name: None, format: None, data: vec![]},
                 constants: vec![],
             },
             data: vec![],
         };
-        let result = CTIFile::blank();
+        let result = Record::blank();
         assert_eq!(result, expected);
     }
 }
 
 #[derive(Error, Debug, PartialEq)]
-pub enum CTIReaderError {
+pub enum ReaderError {
     #[error("More data arrays than defined in header")]
     DataArrayOverIndex,
     #[error("Independent variable defined twice")]
     IndependentVariableDefinedTwice,
     #[error("Single use keyword `{0}` defined twice")]
-    SingleUseKeywordDefinedTwice(CTIKeywords),
+    SingleUseKeywordDefinedTwice(Keywords),
     #[error("Keyword `{0}` is out of order in the file")]
-    OutOfOrderKeyword(CTIKeywords),
+    OutOfOrderKeyword(Keywords),
     #[error("Cannot open file `{0}`")]
     CannotOpen(PathBuf),
     #[error("Error on line {0}: {1}")]
-    LineError(usize, CTIParseError),
+    LineError(usize, ParseError),
 }
-type CTIReaderResult<T> = std::result::Result<T, CTIReaderError>;
+type ReaderResult<T> = std::result::Result<T, ReaderError>;
 
 #[cfg(test)]
-mod test_cti_reader_error {
+mod test_reader_error {
     use super::*;
 
     mod test_display {
@@ -2098,37 +2098,37 @@ mod test_cti_reader_error {
 
         #[test]
         fn data_array_over_index() {
-            let error = CTIReaderError::DataArrayOverIndex;
+            let error = ReaderError::DataArrayOverIndex;
             assert_eq!(format!("{}", error), "More data arrays than defined in header");
         }
 
         #[test]
         fn independent_variable_defined_twice() {
-            let error = CTIReaderError::IndependentVariableDefinedTwice;
+            let error = ReaderError::IndependentVariableDefinedTwice;
             assert_eq!(format!("{}", error), "Independent variable defined twice");
         }
 
         #[test]
         fn single_use_keyword_defined_twice() {
-            let error = CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::End);
+            let error = ReaderError::SingleUseKeywordDefinedTwice(Keywords::End);
             assert_eq!(format!("{}", error), "Single use keyword `END` defined twice");
         }
 
         #[test]
         fn out_of_order_keyword() {
-            let error = CTIReaderError::OutOfOrderKeyword(CTIKeywords::Begin);
+            let error = ReaderError::OutOfOrderKeyword(Keywords::Begin);
             assert_eq!(format!("{}", error), "Keyword `BEGIN` is out of order in the file");
         }
 
         #[test]
         fn cannot_open() {
-            let error = CTIReaderError::CannotOpen(Path::new("/temp").to_path_buf());
+            let error = ReaderError::CannotOpen(Path::new("/temp").to_path_buf());
             assert_eq!(format!("{}", error), "Cannot open file `/temp`");
         }
 
         #[test]
         fn line_error() {
-            let error = CTIReaderError::LineError(10, CTIParseError::BadRegex);
+            let error = ReaderError::LineError(10, ParseError::BadRegex);
             assert_eq!(format!("{}", error), "Error on line 10: Regex could not be parsed");
         }
     }
@@ -2136,79 +2136,79 @@ mod test_cti_reader_error {
 
 /// States in the reader FSM
 #[derive(Debug, PartialEq, Clone, Copy)]
-enum CTIFileReaderStates {
+enum RecordReaderStates {
     Header,
     Data,
     VarList,
     SeqList,
 }
 
-/// Represents state in a CTI file reader FSM
+/// Represents state in a CITI file reader FSM
 #[derive(Debug, PartialEq)]
-struct CTIFileReaderState {
-    file: CTIFile,
-    state: CTIFileReaderStates,
+struct RecordReaderState {
+    file: Record,
+    state: RecordReaderStates,
     data_array_counter: usize,
     independent_variable_already_read: bool,
 }
 
-impl CTIFileReaderState {
-    pub fn new() -> CTIFileReaderState {
-        CTIFileReaderState {
-            file: CTIFile {
-                header: CTIHeader::blank(),
+impl RecordReaderState {
+    pub fn new() -> RecordReaderState {
+        RecordReaderState {
+            file: Record {
+                header: Header::blank(),
                 data: vec![],
             },
-            state: CTIFileReaderStates::Header,
+            state: RecordReaderStates::Header,
             data_array_counter: 0,
             independent_variable_already_read: false,
         }
     }
 
-    pub fn process_keyword(self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+    pub fn process_keyword(self, keyword: Keywords) -> ReaderResult<Self> {
         match self.state {
-            CTIFileReaderStates::Header => CTIFileReaderState::state_header(self, keyword),
-            CTIFileReaderStates::Data => CTIFileReaderState::state_data(self, keyword),
-            CTIFileReaderStates::VarList => CTIFileReaderState::state_var_list(self, keyword),
-            CTIFileReaderStates::SeqList => CTIFileReaderState::state_seq_list(self, keyword),
+            RecordReaderStates::Header => RecordReaderState::state_header(self, keyword),
+            RecordReaderStates::Data => RecordReaderState::state_data(self, keyword),
+            RecordReaderStates::VarList => RecordReaderState::state_var_list(self, keyword),
+            RecordReaderStates::SeqList => RecordReaderState::state_seq_list(self, keyword),
         }
     }
 
-    fn state_header(mut self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+    fn state_header(mut self, keyword: Keywords) -> ReaderResult<Self> {
         match keyword {
-            CTIKeywords::CITIFile{version} => {
+            Keywords::CITIFile{version} => {
                 match self.file.header.version {
-                    Some(_) => Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::CITIFile{version})),
+                    Some(_) => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})),
                     None => {
                         self.file.header.version = Some(version);
                         Ok(self)
                     }
                 }
             },
-            CTIKeywords::Name(name) => {
+            Keywords::Name(name) => {
                 match self.file.header.name {
-                    Some(_) => Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Name(name))),
+                    Some(_) => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(name))),
                     None => {
                         self.file.header.name = Some(name);
                         Ok(self)
                     }
                 }
             },
-            CTIKeywords::Device{name, value} => {
+            Keywords::Device{name, value} => {
                 self.file.header.add_device(&name, &value);
                 Ok(self)
             },
-            CTIKeywords::Comment(comment) => {
+            Keywords::Comment(comment) => {
                 self.file.header.comments.push(comment);
                 Ok(self)
             },
-            CTIKeywords::Constant{name, value} => {
-                self.file.header.constants.push(CTIConstant::new(&name, &value));
+            Keywords::Constant{name, value} => {
+                self.file.header.constants.push(Constant::new(&name, &value));
                 Ok(self)
             },
-            CTIKeywords::Var{name, format, length} => {
+            Keywords::Var{name, format, length} => {
                 match self.file.header.independent_variable.name {
-                    Some(_) => Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Var{name, format, length})),
+                    Some(_) => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})),
                     None => {
                         self.file.header.independent_variable.name = Some(name);
                         self.file.header.independent_variable.format = format;
@@ -2216,109 +2216,109 @@ impl CTIFileReaderState {
                     },
                 }
             },
-            CTIKeywords::VarListBegin => {
+            Keywords::VarListBegin => {
                 match self.independent_variable_already_read {
                     false => {
-                        self.state = CTIFileReaderStates::VarList;
+                        self.state = RecordReaderStates::VarList;
                         Ok(self)
                     },
-                    true => Err(CTIReaderError::IndependentVariableDefinedTwice),
+                    true => Err(ReaderError::IndependentVariableDefinedTwice),
                 }
             },
-            CTIKeywords::SegListBegin => {
+            Keywords::SegListBegin => {
                 match self.independent_variable_already_read {
                     false => {
-                        self.state = CTIFileReaderStates::SeqList;
+                        self.state = RecordReaderStates::SeqList;
                         Ok(self)
                     },
-                    true => Err(CTIReaderError::IndependentVariableDefinedTwice),
+                    true => Err(ReaderError::IndependentVariableDefinedTwice),
                 }
             },
-            CTIKeywords::Begin => {
-                self.state = CTIFileReaderStates::Data;
+            Keywords::Begin => {
+                self.state = RecordReaderStates::Data;
                 Ok(self)
             },
-            CTIKeywords::Data{name, format} => {
-                self.file.data.push(CTIDataArray::new(&name, &format));
+            Keywords::Data{name, format} => {
+                self.file.data.push(DataArray::new(&name, &format));
                 Ok(self)
             },
-            _ => Err(CTIReaderError::OutOfOrderKeyword(keyword)),
+            _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
         }
     }
 
-    fn state_data(mut self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+    fn state_data(mut self, keyword: Keywords) -> ReaderResult<Self> {
         match keyword {
-            CTIKeywords::DataPair{real, imag} => {
+            Keywords::DataPair{real, imag} => {
                 if self.data_array_counter < self.file.data.len() {
                     self.file.data[self.data_array_counter].add_sample(real, imag);
                     Ok(self)
                 } else {
-                    Err(CTIReaderError::DataArrayOverIndex)
+                    Err(ReaderError::DataArrayOverIndex)
                 }
             }
-            CTIKeywords::End => {
-                self.state = CTIFileReaderStates::Header;
+            Keywords::End => {
+                self.state = RecordReaderStates::Header;
                 self.data_array_counter += 1;
                 Ok(self)
             },
-            _ => Err(CTIReaderError::OutOfOrderKeyword(keyword)),
+            _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
         }
     }
 
-    fn state_var_list(mut self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+    fn state_var_list(mut self, keyword: Keywords) -> ReaderResult<Self> {
         match keyword {
-            CTIKeywords::VarListItem(value) => {
+            Keywords::VarListItem(value) => {
                 self.file.header.independent_variable.push(value);
                 Ok(self)
             },
-            CTIKeywords::VarListEnd => {
+            Keywords::VarListEnd => {
                 self.independent_variable_already_read = true;
-                self.state = CTIFileReaderStates::Header;
+                self.state = RecordReaderStates::Header;
                 Ok(self)
             },
-            _ => Err(CTIReaderError::OutOfOrderKeyword(keyword)),
+            _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
         }
     }
 
-    fn state_seq_list(mut self, keyword: CTIKeywords) -> CTIReaderResult<Self> {
+    fn state_seq_list(mut self, keyword: Keywords) -> ReaderResult<Self> {
         match keyword {
-            CTIKeywords::SegItem{first, last, number} => {
+            Keywords::SegItem{first, last, number} => {
                 self.file.header.independent_variable.seq(first, last, number);
                 Ok(self)
             },
-            CTIKeywords::SegListEnd => {
+            Keywords::SegListEnd => {
                 self.independent_variable_already_read = true;
-                self.state = CTIFileReaderStates::Header;
+                self.state = RecordReaderStates::Header;
                 Ok(self)
             },
-            _ => Err(CTIReaderError::OutOfOrderKeyword(keyword)),
+            _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
         }
     }
 }
 
 #[cfg(test)]
-mod test_cti_file_reader_state {
+mod test_file_reader_state {
     use super::*;
 
     #[test]
     fn test_new() {
-        let expected = CTIFileReaderState{
-            file: CTIFile {
-                header: CTIHeader {
+        let expected = RecordReaderState{
+            file: Record {
+                header: Header {
                     version: None,
                     name: None,
                     comments: vec![],
                     devices: vec![],
-                    independent_variable: CTIVar {name: None, format: None, data: vec![]},
+                    independent_variable: Var {name: None, format: None, data: vec![]},
                     constants: vec![],
                 },
                 data: vec![],
             },
-            state: CTIFileReaderStates::Header,
+            state: RecordReaderStates::Header,
             data_array_counter: 0,
             independent_variable_already_read: false,
         };
-        let result = CTIFileReaderState::new();
+        let result = RecordReaderState::new();
         assert_eq!(result, expected);
     }
 
@@ -2328,21 +2328,21 @@ mod test_cti_file_reader_state {
         mod test_keywords {
             use super::*;
 
-            fn initialize_state() -> CTIFileReaderState {
-                CTIFileReaderState{
-                    state: CTIFileReaderStates::Header,
-                    .. CTIFileReaderState::new()
+            fn initialize_state() -> RecordReaderState {
+                RecordReaderState{
+                    state: RecordReaderStates::Header,
+                    .. RecordReaderState::new()
                 }
             }
 
             #[test]
             fn citifile() {
-                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.version, Some(String::from("A.01.01")));
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2350,20 +2350,20 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn citifile_cannot_be_called_twice() {
-                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let mut state = initialize_state();
                 state.file.header.version = Some(String::from("A.01.01"));
-                assert_eq!(Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn name() {
-                let keyword = CTIKeywords::Name(String::from("Name"));
+                let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.name, Some(String::from("Name")));
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2371,21 +2371,21 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn name_cannot_be_called_twice() {
-                let keyword = CTIKeywords::Name(String::from("CAL_SET"));
+                let keyword = Keywords::Name(String::from("CAL_SET"));
                 let mut state = initialize_state();
                 state.file.header.name = Some(String::from("CAL_SET"));
-                assert_eq!(Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Name(String::from("CAL_SET")))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(String::from("CAL_SET")))), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_none() {
-                let keyword = CTIKeywords::Var{name: String::from("Name"), format: None, length: 102};
+                let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.independent_variable.name, Some(String::from("Name")));
                         assert_eq!(s.file.header.independent_variable.format, None);
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2393,13 +2393,13 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn var_some() {
-                let keyword = CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
+                let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.independent_variable.name, Some(String::from("Name")));
                         assert_eq!(s.file.header.independent_variable.format, Some(String::from("MAG")));
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2407,28 +2407,28 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn var_cannot_be_called_twice() {
-                let keyword = CTIKeywords::Var{name: String::from("FREQ"), format: None, length: 102};
+                let keyword = Keywords::Var{name: String::from("FREQ"), format: None, length: 102};
                 let mut state = initialize_state();
                 state.file.header.independent_variable.name = Some(String::from("Name"));
-                assert_eq!(Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Var{name: String::from("FREQ"), format: None, length: 102})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name: String::from("FREQ"), format: None, length: 102})), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_cannot_be_called_twice_none_format() {
-                let keyword = CTIKeywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102};
+                let keyword = Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102};
                 let mut state = initialize_state();
                 state.file.header.independent_variable.name = Some(String::from("Name"));
-                assert_eq!(Err(CTIReaderError::SingleUseKeywordDefinedTwice(CTIKeywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
             }
 
             #[test]
             fn constant_empty() {
-                let keyword = CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.constants, vec![CTIConstant::new("Name", "Value")]);
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.file.header.constants, vec![Constant::new("Name", "Value")]);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2436,13 +2436,13 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn constant_exists() {
-                let keyword = CTIKeywords::Constant{name: String::from("New Name"), value: String::from("New Value")};
+                let keyword = Keywords::Constant{name: String::from("New Name"), value: String::from("New Value")};
                 let mut state = initialize_state();
-                state.file.header.constants.push(CTIConstant::new("Name", "Value"));
+                state.file.header.constants.push(Constant::new("Name", "Value"));
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.constants, vec![CTIConstant::new("Name", "Value"), CTIConstant::new("New Name", "New Value")]);
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.file.header.constants, vec![Constant::new("Name", "Value"), Constant::new("New Name", "New Value")]);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2450,13 +2450,13 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn device() {
-                let keyword = CTIKeywords::Device{name: String::from("NA"), value: String::from("Value")};
+                let keyword = Keywords::Device{name: String::from("NA"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.devices.len(), 1);
-                        assert_eq!(s.file.header.devices[0], CTIDevice{name: String::from("NA"), entries: vec![String::from("Value")]});
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.file.header.devices[0], Device{name: String::from("NA"), entries: vec![String::from("Value")]});
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2464,15 +2464,15 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn device_with_existing_device() {
-                let keyword = CTIKeywords::Device{name: String::from("WVI"), value: String::from("1904")};
+                let keyword = Keywords::Device{name: String::from("WVI"), value: String::from("1904")};
                 let mut state = initialize_state();
                 state.file.header.add_device("NA", "Value");
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.devices.len(), 2);
-                        assert_eq!(s.file.header.devices[0], CTIDevice{name: String::from("NA"), entries: vec![String::from("Value")]});
-                        assert_eq!(s.file.header.devices[1], CTIDevice{name: String::from("WVI"), entries: vec![String::from("1904")]});
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.file.header.devices[0], Device{name: String::from("NA"), entries: vec![String::from("Value")]});
+                        assert_eq!(s.file.header.devices[1], Device{name: String::from("WVI"), entries: vec![String::from("1904")]});
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2480,69 +2480,69 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn seg_list_begin() {
-                let keyword = CTIKeywords::SegListBegin;
+                let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Ok(s) => assert_eq!(s.state, CTIFileReaderStates::SeqList),
+                    Ok(s) => assert_eq!(s.state, RecordReaderStates::SeqList),
                     Err(_) => panic!(),
                 }
             }
 
             #[test]
             fn seg_list_begin_when_already_read() {
-                let keyword = CTIKeywords::SegListBegin;
+                let keyword = Keywords::SegListBegin;
                 let mut state = initialize_state();
                 state.independent_variable_already_read = true;
-                assert_eq!(Err(CTIReaderError::IndependentVariableDefinedTwice), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::IndependentVariableDefinedTwice), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_item() {
-                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 2};
+                let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_list_end() {
-                let keyword = CTIKeywords::SegListEnd;
+                let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListEnd)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_list_begin() {
-                let keyword = CTIKeywords::VarListBegin;
+                let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Ok(s) => assert_eq!(s.state, CTIFileReaderStates::VarList),
+                    Ok(s) => assert_eq!(s.state, RecordReaderStates::VarList),
                     Err(_) => panic!(),
                 }
             }
             
             #[test]
             fn var_list_begin_when_already_read() {
-                let keyword = CTIKeywords::VarListBegin;
+                let keyword = Keywords::VarListBegin;
                 let mut state = initialize_state();
                 state.independent_variable_already_read = true;
-                assert_eq!(Err(CTIReaderError::IndependentVariableDefinedTwice), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::IndependentVariableDefinedTwice), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_list_item() {
-                let keyword = CTIKeywords::VarListItem(1.);
+                let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListItem(1.))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(1.))), state.process_keyword(keyword));
             }
 
             #[test]
             fn data() {
-                let keyword = CTIKeywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
+                let keyword = Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.data, vec![CTIDataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}]);
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.file.data, vec![DataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}]);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2550,16 +2550,16 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn data_with_already_existing() {
-                let keyword = CTIKeywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
+                let keyword = Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
                 let mut state = initialize_state();
-                state.file.data.push(CTIDataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]});
+                state.file.data.push(DataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]});
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.data, vec![
-                            CTIDataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]},
-                            CTIDataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}
+                            DataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]},
+                            DataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}
                         ]);
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2567,19 +2567,19 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn data_pair() {
-                let keyword = CTIKeywords::DataPair{real: 1., imag: 2.};
+                let keyword = Keywords::DataPair{real: 1., imag: 2.};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::DataPair{real: 1., imag: 2.})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real: 1., imag: 2.})), state.process_keyword(keyword));
             }
 
             #[test]
             fn begin() {
-                let keyword = CTIKeywords::Begin;
+                let keyword = Keywords::Begin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.data_array_counter, 0);
-                        assert_eq!(s.state, CTIFileReaderStates::Data);
+                        assert_eq!(s.state, RecordReaderStates::Data);
                     },
                     Err(_) => panic!(),
                 }
@@ -2587,19 +2587,19 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn end() {
-                let keyword = CTIKeywords::End;
+                let keyword = Keywords::End;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::End)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::End)), state.process_keyword(keyword));
             }
 
             #[test]
             fn comment() {
-                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.comments, vec![String::from("Comment")]);
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2607,13 +2607,13 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn comment_with_existing() {
-                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let keyword = Keywords::Comment(String::from("Comment"));
                 let mut state = initialize_state();
                 state.file.header.comments.push(String::from("Comment First"));
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.comments, vec![String::from("Comment First"), String::from("Comment")]);
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2627,122 +2627,122 @@ mod test_cti_file_reader_state {
         mod test_keywords {
             use super::*;
 
-            fn initialize_state() -> CTIFileReaderState {
-                let mut state = CTIFileReaderState{
-                    state: CTIFileReaderStates::Data,
-                    .. CTIFileReaderState::new()
+            fn initialize_state() -> RecordReaderState {
+                let mut state = RecordReaderState{
+                    state: RecordReaderStates::Data,
+                    .. RecordReaderState::new()
                 };
-                state.file.data.push(CTIDataArray::blank());
+                state.file.data.push(DataArray::blank());
                 state
             }
 
             #[test]
             fn citifile() {
-                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn name() {
-                let keyword = CTIKeywords::Name(String::from("Name"));
+                let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Name(String::from("Name")))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Name(String::from("Name")))), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_none() {
-                let keyword = CTIKeywords::Var{name: String::from("Name"), format: None, length: 102};
+                let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_some() {
-                let keyword = CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
+                let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
             }
 
             #[test]
             fn constant() {
-                let keyword = CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn device() {
-                let keyword = CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_list_begin() {
-                let keyword = CTIKeywords::SegListBegin;
+                let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListBegin)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_item() {
-                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 2};
+                let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_list_end() {
-                let keyword = CTIKeywords::SegListEnd;
+                let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListEnd)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_list_begin() {
-                let keyword = CTIKeywords::VarListBegin;
+                let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListBegin)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)), state.process_keyword(keyword));
             }
             
             #[test]
             fn var_list_item() {
-                let keyword = CTIKeywords::VarListItem(1.);
+                let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListItem(1.))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(1.))), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_list_item_exponent() {
-                let keyword = CTIKeywords::VarListItem(1e9);
+                let keyword = Keywords::VarListItem(1e9);
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListItem(1e9))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(1e9))), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_list_end() {
-                let keyword = CTIKeywords::VarListEnd;
+                let keyword = Keywords::VarListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListEnd)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListEnd)), state.process_keyword(keyword));
             }
 
             #[test]
             fn data() {
-                let keyword = CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")};
+                let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn data_pair() {
-                let keyword = CTIKeywords::DataPair{real: 1., imag: 2.};
+                let keyword = Keywords::DataPair{real: 1., imag: 2.};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.data[0].real, vec![1.]);
                         assert_eq!(s.file.data[0].imag, vec![2.]);
-                        assert_eq!(s.state, CTIFileReaderStates::Data);
+                        assert_eq!(s.state, RecordReaderStates::Data);
                     },
                     Err(_) => panic!(),
                 }
@@ -2750,9 +2750,9 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn data_pair_second_array() {
-                let keyword = CTIKeywords::DataPair{real: 1., imag: 2.};
+                let keyword = Keywords::DataPair{real: 1., imag: 2.};
                 let mut state = initialize_state();
-                state.file.data.push(CTIDataArray::blank());
+                state.file.data.push(DataArray::blank());
                 state.data_array_counter = 1;
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -2760,7 +2760,7 @@ mod test_cti_file_reader_state {
                         assert_eq!(s.file.data[0].imag, vec![]);
                         assert_eq!(s.file.data[1].real, vec![1.]);
                         assert_eq!(s.file.data[1].imag, vec![2.]);
-                        assert_eq!(s.state, CTIFileReaderStates::Data);
+                        assert_eq!(s.state, RecordReaderStates::Data);
                     },
                     Err(_) => panic!(),
                 }
@@ -2768,26 +2768,26 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn data_pair_out_of_bounds() {
-                let keyword = CTIKeywords::DataPair{real: 1., imag: 2.};
+                let keyword = Keywords::DataPair{real: 1., imag: 2.};
                 let mut state = initialize_state();
                 state.data_array_counter = 1;
-                assert_eq!(Err(CTIReaderError::DataArrayOverIndex), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::DataArrayOverIndex), state.process_keyword(keyword));
             }
 
             #[test]
             fn begin() {
-                let keyword = CTIKeywords::Begin;
+                let keyword = Keywords::Begin;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Begin)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)), state.process_keyword(keyword));
             }
 
             #[test]
             fn end() {
-                let keyword = CTIKeywords::End;
+                let keyword = Keywords::End;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                         assert_eq!(s.data_array_counter, 1);
                     },
                     Err(_) => panic!(),
@@ -2796,12 +2796,12 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn end_increment_index() {
-                let keyword = CTIKeywords::End;
+                let keyword = Keywords::End;
                 let mut state = initialize_state();
                 state.data_array_counter = 1;
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                         assert_eq!(s.data_array_counter, 2);
                     },
                     Err(_) => panic!(),
@@ -2810,9 +2810,9 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn comment() {
-                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
             }
         }   
     }
@@ -2823,91 +2823,91 @@ mod test_cti_file_reader_state {
         mod test_keywords {
             use super::*;
 
-            fn initialize_state() -> CTIFileReaderState {
-                CTIFileReaderState{
-                    state: CTIFileReaderStates::VarList,
-                    .. CTIFileReaderState::new()
+            fn initialize_state() -> RecordReaderState {
+                RecordReaderState{
+                    state: RecordReaderStates::VarList,
+                    .. RecordReaderState::new()
                 }
             }
 
             #[test]
             fn citifile() {
-                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn name() {
-                let keyword = CTIKeywords::Name(String::from("Name"));
+                let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Name(String::from("Name")))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Name(String::from("Name")))), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_none() {
-                let keyword = CTIKeywords::Var{name: String::from("Name"), format: None, length: 102};
+                let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_some() {
-                let keyword = CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
+                let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
             }
 
             #[test]
             fn constant() {
-                let keyword = CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn device() {
-                let keyword = CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_list_begin() {
-                let keyword = CTIKeywords::SegListBegin;
+                let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListBegin)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_item() {
-                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 2};
+                let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_list_end() {
-                let keyword = CTIKeywords::SegListEnd;
+                let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListEnd)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_list_begin() {
-                let keyword = CTIKeywords::VarListBegin;
+                let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListBegin)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)), state.process_keyword(keyword));
             }
             
             #[test]
             fn var_list_item() {
-                let keyword = CTIKeywords::VarListItem(1.);
+                let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.independent_variable.data, vec![1.]);
-                        assert_eq!(s.state, CTIFileReaderStates::VarList);
+                        assert_eq!(s.state, RecordReaderStates::VarList);
                     },
                     Err(_) => panic!(),
                 }
@@ -2915,12 +2915,12 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn var_list_item_exponent() {
-                let keyword = CTIKeywords::VarListItem(1e9);
+                let keyword = Keywords::VarListItem(1e9);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.independent_variable.data, vec![1e9]);
-                        assert_eq!(s.state, CTIFileReaderStates::VarList);
+                        assert_eq!(s.state, RecordReaderStates::VarList);
                     },
                     Err(_) => panic!(),
                 }
@@ -2928,13 +2928,13 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn var_list_item_already_exists() {
-                let keyword = CTIKeywords::VarListItem(1e9);
+                let keyword = Keywords::VarListItem(1e9);
                 let mut state = initialize_state();
                 state.file.header.independent_variable.push(1e8);
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.independent_variable.data, vec![1e8, 1e9]);
-                        assert_eq!(s.state, CTIFileReaderStates::VarList);
+                        assert_eq!(s.state, RecordReaderStates::VarList);
                     },
                     Err(_) => panic!(),
                 }
@@ -2942,12 +2942,12 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn var_list_end() {
-                let keyword = CTIKeywords::VarListEnd;
+                let keyword = Keywords::VarListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.independent_variable_already_read, true);
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -2955,37 +2955,37 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn data() {
-                let keyword = CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")};
+                let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn data_pair() {
-                let keyword = CTIKeywords::DataPair{real: 1., imag: 1.};
+                let keyword = Keywords::DataPair{real: 1., imag: 1.};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::DataPair{real: 1., imag: 1.})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real: 1., imag: 1.})), state.process_keyword(keyword));
             }
 
             #[test]
             fn begin() {
-                let keyword = CTIKeywords::Begin;
+                let keyword = Keywords::Begin;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Begin)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)), state.process_keyword(keyword));
             }
 
             #[test]
             fn end() {
-                let keyword = CTIKeywords::End;
+                let keyword = Keywords::End;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::End)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::End)), state.process_keyword(keyword));
             }
 
             #[test]
             fn comment() {
-                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
             }
         }   
     }
@@ -2996,70 +2996,70 @@ mod test_cti_file_reader_state {
         mod test_keywords {
             use super::*;
 
-            fn initialize_state() -> CTIFileReaderState {
-                CTIFileReaderState{
-                    state: CTIFileReaderStates::SeqList,
-                    .. CTIFileReaderState::new()
+            fn initialize_state() -> RecordReaderState {
+                RecordReaderState{
+                    state: RecordReaderStates::SeqList,
+                    .. RecordReaderState::new()
                 }
             }
 
             #[test]
             fn citifile() {
-                let keyword = CTIKeywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn name() {
-                let keyword = CTIKeywords::Name(String::from("Name"));
+                let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Name(String::from("Name")))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Name(String::from("Name")))), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_none() {
-                let keyword = CTIKeywords::Var{name: String::from("Name"), format: None, length: 102};
+                let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_some() {
-                let keyword = CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
+                let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
             }
 
             #[test]
             fn constant() {
-                let keyword = CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn device() {
-                let keyword = CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_list_begin() {
-                let keyword = CTIKeywords::SegListBegin;
+                let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::SegListBegin)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)), state.process_keyword(keyword));
             }
 
             #[test]
             fn seg_item() {
-                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 2};
+                let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.independent_variable.data, vec![10., 100.]);
-                        assert_eq!(s.state, CTIFileReaderStates::SeqList);
+                        assert_eq!(s.state, RecordReaderStates::SeqList);
                     },
                     Err(_) => panic!(),
                 }
@@ -3067,12 +3067,12 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn seg_item_triple() {
-                let keyword = CTIKeywords::SegItem{first: 10., last: 100., number: 3};
+                let keyword = Keywords::SegItem{first: 10., last: 100., number: 3};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.file.header.independent_variable.data, vec![10., 55., 100.]);
-                        assert_eq!(s.state, CTIFileReaderStates::SeqList);
+                        assert_eq!(s.state, RecordReaderStates::SeqList);
                     },
                     Err(_) => panic!(),
                 }
@@ -3080,12 +3080,12 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn seg_list_end() {
-                let keyword = CTIKeywords::SegListEnd;
+                let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.independent_variable_already_read, true);
-                        assert_eq!(s.state, CTIFileReaderStates::Header);
+                        assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
                 }
@@ -3093,58 +3093,58 @@ mod test_cti_file_reader_state {
 
             #[test]
             fn var_list_begin() {
-                let keyword = CTIKeywords::VarListBegin;
+                let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListBegin)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)), state.process_keyword(keyword));
             }
             
             #[test]
             fn var_list_item() {
-                let keyword = CTIKeywords::VarListItem(1.);
+                let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListItem(1.))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(1.))), state.process_keyword(keyword));
             }
 
             #[test]
             fn var_list_end() {
-                let keyword = CTIKeywords::VarListEnd;
+                let keyword = Keywords::VarListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::VarListEnd)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListEnd)), state.process_keyword(keyword));
             }
 
             #[test]
             fn data() {
-                let keyword = CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")};
+                let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
             }
 
             #[test]
             fn data_pair() {
-                let keyword = CTIKeywords::DataPair{real: 1., imag: 1.};
+                let keyword = Keywords::DataPair{real: 1., imag: 1.};
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::DataPair{real: 1., imag: 1.})), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real: 1., imag: 1.})), state.process_keyword(keyword));
             }
 
             #[test]
             fn begin() {
-                let keyword = CTIKeywords::Begin;
+                let keyword = Keywords::Begin;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Begin)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)), state.process_keyword(keyword));
             }
 
             #[test]
             fn end() {
-                let keyword = CTIKeywords::End;
+                let keyword = Keywords::End;
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::End)), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::End)), state.process_keyword(keyword));
             }
 
             #[test]
             fn comment() {
-                let keyword = CTIKeywords::Comment(String::from("Comment"));
+                let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
-                assert_eq!(Err(CTIReaderError::OutOfOrderKeyword(CTIKeywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
+                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
             }
         }   
     }

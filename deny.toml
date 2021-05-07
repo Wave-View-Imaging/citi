@@ -4,10 +4,5 @@ allow-osi-fsf-free = "neither"
 copyleft = "deny"
 allow = [
     "Apache-2.0",
-    "Apache-2.0 WITH LLVM-exception",
     "MIT",
-    "MPL-2.0",
 ]
-
-[licenses.private]
-ignore = true

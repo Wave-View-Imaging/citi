@@ -1,4 +1,4 @@
-use reco::io::cti::{CTIResult, CTIFile, CTIDevice};
+use citi::{Result, Record, Device};
 use std::path::PathBuf;
 
 macro_rules! assert_array_relative_eq {
@@ -68,8 +68,8 @@ mod cti_regression_tests {
             path_buf
         }
 
-        fn setup() -> CTIResult<CTIFile> {
-            CTIFile::read(&filename())
+        fn setup() -> Result<Record> {
+            Record::read(&filename())
         }
 
         #[test]
@@ -161,8 +161,8 @@ mod cti_regression_tests {
             path_buf
         }
 
-        fn setup() -> CTIResult<CTIFile> {
-            CTIFile::read(&filename())
+        fn setup() -> Result<Record> {
+            Record::read(&filename())
         }
 
         #[test]
@@ -272,8 +272,8 @@ mod cti_regression_tests {
             path_buf
         }
 
-        fn setup() -> CTIResult<CTIFile> {
-            CTIFile::read(&filename())
+        fn setup() -> Result<Record> {
+            Record::read(&filename())
         }
 
         #[test]
@@ -375,8 +375,8 @@ mod cti_regression_tests {
             path_buf
         }
 
-        fn setup() -> CTIResult<CTIFile> {
-            CTIFile::read(&filename())
+        fn setup() -> Result<Record> {
+            Record::read(&filename())
         }
 
         #[test]
@@ -416,7 +416,7 @@ mod cti_regression_tests {
         fn devices() {
             match setup() {
                 Ok(file) => {
-                    let device = CTIDevice{
+                    let device = Device{
                         name: String::from("NA"),
                         entries: vec![
                             "VERSION HP8510B.05.00",

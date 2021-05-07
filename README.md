@@ -1,7 +1,7 @@
 # Reco
 RF Imaging Reconstruction Algorithms
 
-![Build Status](https://github.com/Wave-View-Imaging/Reco/actions/workflows/ci.yml/badge.svg)
+![Build Status](https://github.com/Wave-View-Imaging/citi/actions/workflows/ci.yml/badge.svg)
 
 ## Development
 Since a Docker is not yet available, some setup is needed on your local machine.

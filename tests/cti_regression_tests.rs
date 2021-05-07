@@ -1,4 +1,4 @@
-use citi::{Result, Record, Device};
+use citi::{Result, Record, Device, DataArray, Var};
 use std::path::PathBuf;
 
 macro_rules! assert_array_relative_eq {
@@ -48,7 +48,7 @@ mod test_assert_array_relative_eq_macro {
 }
 
 #[cfg(test)]
-mod cti_regression_tests {
+mod cti_read_regression_tests {
     use super::*;
 
     fn data_directory() -> PathBuf {
@@ -498,5 +498,101 @@ mod cti_regression_tests {
                 Err(_) => panic!("File could not be read"),
             }
         }
+    }
+}
+
+macro_rules! assert_files_equal {
+    ($lhs:expr, $rhs:expr) => {
+        let left = std::fs::read_to_string($lhs).expect("Unable to read file `$lhs`");
+        let right = std::fs::read_to_string($rhs).expect("Unable to read file `$rhs`");
+
+        assert_eq!(left, right);
+    };
+}
+
+#[cfg(test)]
+mod test_assert_files_equal {
+    use super::*;
+
+    fn data_directory() -> PathBuf {
+        let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path_buf.push("tests");
+        path_buf.push("cti_regression_files");
+        path_buf
+    }
+
+    fn filename1() -> PathBuf {
+        let mut path_buf = data_directory();
+        path_buf.push("display_memory.cti");
+        path_buf
+    }
+
+    fn filename2() -> PathBuf {
+        let mut path_buf = data_directory();
+        path_buf.push("wvi_file.cti");
+        path_buf
+    }
+
+    #[test]
+    fn pass_on_same_file() {
+        assert_files_equal!(filename1(), filename1());
+    }
+
+    #[test]
+    #[should_panic]
+    fn fail_on_different_files() {
+        assert_files_equal!(filename1(), filename2());
+    }
+
+    #[test]
+    #[should_panic]
+    fn fail_on_bad_path() {
+        assert_files_equal!(filename1(), "");
+    }
+}
+
+#[cfg(test)]
+mod cti_write_regression_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn data_directory() -> PathBuf {
+        let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path_buf.push("tests");
+        path_buf.push("cti_regression_files");
+        path_buf
+    }
+
+    fn display_memory_filename() -> PathBuf {
+        let mut path_buf = data_directory();
+        path_buf.push("display_memory_output.cti");
+        path_buf
+    }
+
+    fn display_memory_record() -> Record {
+        let mut record = Record::new("A.01.00", "MEMORY");
+        record.header.devices.push(Device{name: String::from("NA"), entries: vec![
+            "VERSION HP8510B.05.00",
+            "REGISTER 1",
+        ].iter().map(|&s| String::from(s)).collect()});
+        record.data.push(DataArray{
+            name: Some(String::from("S")),
+            format: Some(String::from("RI")),
+            real: vec![-1.31189E-3, -3.67867E-3, -3.43990E-3, -2.70664E-4, 0.65892E-4],
+            imag: vec![-1.47980E-3, -0.67782E-3, 0.58746E-3, -9.76175E-4, -9.61571E-4],
+        });
+        record.header.independent_variable = Var{name: Some(String::from("FREQ")), format: Some(String::from("MAG")), data: vec![0., 1., 2., 3., 4.]};
+
+        record
+    }
+
+    #[test]
+    fn display_memory() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("temp-display-memory.cti");
+        let record = display_memory_record();
+        record.write(&file_path).unwrap();
+
+        assert_files_equal!(display_memory_filename(), file_path);
     }
 }

@@ -1,15 +1,15 @@
-//! Input/Output for CITI files
+//! Input/Output for CITI records
 //! 
-//! <p><a href="http://literature.cdn.keysight.com/litweb/pdf/ads15/cktsim/ck2016.html#:~:text=CITIfile%20stands%20for%20Common%20Instrumentation,it%20can%20meet%20future%20needs">The standard</a>, defines the following entities:</p>
+//! <p><a href="http://literature.cdn.keysight.com/litweb/pdf/ads15/cktsim/ck2016.html#:~:text=CITIrecord%20stands%20for%20Common%20Instrumentation,it%20can%20meet%20future%20needs">The standard</a>, defines the following entities:</p>
 //! 
 //! | Name     | Description                     |
 //! |----------|---------------------------------|
-//! | Package  | The entire contents of the file |
-//! | Header   | Header of the file              |
+//! | Record   | The entire contents of the record |
+//! | Header   | Header of the record              |
 //! | Data     | One or more data arrays         |
 //! | Keywords | Define the header contents      |
 //! 
-//! As this is a custom ASCII file type, the standard is not as simple as one would like.
+//! As this is a custom ASCII record type, the standard is not as simple as one would like.
 //! The standard is followed as closely as is reasonable. The largest changes are in the
 //! extension of the keywords.
 //! 
@@ -25,9 +25,9 @@
 //! 
 //! ## Input-Output consistency:
 //! 
-//! General input-output consistency cannot be guaranteed with CITI files because of their design.
-//! That is, if a file is read in and read out, the byte representation of the file may change,
-//! exact floating point representations may change, but the file will contain the same information.
+//! General input-output consistency cannot be guaranteed with CITI records because of their design.
+//! That is, if a record is read in and read out, the byte representation of the record may change,
+//! exact floating point representations may change, but the record will contain the same information.
 //! The following is not guaranteed:
 //! 
 //! - ASCII representation of floating points may change because of the String -> Float -> String conversion.
@@ -41,6 +41,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::fmt;
 use std::path::{Path,PathBuf};
+use std::io::Write;
 
 use thiserror::Error;
 
@@ -50,8 +51,10 @@ pub enum Error {
     ParseError(ParseError),
     #[error("Reading error: `{0}`")]
     ReaderError(ReaderError),
-    #[error("Invalid file error: `{0}`")]
+    #[error("Invalid record error: `{0}`")]
     ValidRecordError(ValidRecordError),
+    #[error("Error writing record: `{0}`")]
+    WriteError(WriteError),
 }
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -70,6 +73,12 @@ impl From<ReaderError> for Error {
 impl From<ValidRecordError> for Error {
     fn from(error: ValidRecordError) -> Self {
         Error::ValidRecordError(error)
+    }
+}
+
+impl From<WriteError> for Error {
+    fn from(error: WriteError) -> Self {
+        Error::WriteError(error)
     }
 }
 
@@ -93,9 +102,15 @@ mod test_error {
         }
 
         #[test]
-        fn valid_file_error() {
+        fn valid_record_error() {
             let error = Error::ValidRecordError(ValidRecordError::NoVersion);
-            assert_eq!(format!("{}", error), "Invalid file error: `Version is not defined`");
+            assert_eq!(format!("{}", error), "Invalid record error: `Version is not defined`");
+        }
+
+        #[test]
+        fn write_error() {
+            let error = Error::WriteError(WriteError::NoVersion);
+            assert_eq!(format!("{}", error), "Error writing record: `Version is not defined`");
         }
     }
 
@@ -119,7 +134,7 @@ mod test_error {
         }
 
         #[test]
-        fn from_valid_file_error() {
+        fn from_valid_record_error() {
             let expected = Error::ValidRecordError(ValidRecordError::NoName);
             let input_error = ValidRecordError::NoName;
             let result = Error::from(input_error);
@@ -352,13 +367,13 @@ mod test_keywords {
         use super::*;
 
         #[test]
-        fn citifile_a_01_00() {
+        fn citirecord_a_01_00() {
             let keyword = Keywords::CITIFile{version: String::from("A.01.00")};
             assert_eq!("CITIFILE A.01.00", format!("{}", keyword));
         }
 
         #[test]
-        fn citifile_a_01_01() {
+        fn citirecord_a_01_01() {
             let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
             assert_eq!("CITIFILE A.01.01", format!("{}", keyword));
         }
@@ -496,13 +511,13 @@ mod test_keywords {
         }
 
         #[test]
-        fn citifile_a_01_00() {
+        fn citirecord_a_01_00() {
             let keyword = Keywords::from_str("CITIFILE A.01.00");
             assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.00")}));
         }
 
         #[test]
-        fn citifile_a_01_01() {
+        fn citirecord_a_01_01() {
             let keyword = Keywords::from_str("CITIFILE A.01.01");
             assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.01")}));
         }
@@ -741,13 +756,13 @@ mod test_keywords {
         }
 
         #[test]
-        fn citifile_a_01_00() {
+        fn citirecord_a_01_00() {
             let keyword = Keywords::try_from("CITIFILE A.01.00");
             assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.00")}));
         }
 
         #[test]
-        fn citifile_a_01_01() {
+        fn citirecord_a_01_01() {
             let keyword = Keywords::try_from("CITIFILE A.01.01");
             assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.01")}));
         }
@@ -1498,7 +1513,7 @@ pub enum ValidRecordError {
 type ValidRecordResult<T> = std::result::Result<T, ValidRecordError>;
 
 #[cfg(test)]
-mod test_valid_file_error {
+mod test_valid_record_error {
     use super::*;
 
     mod test_display {
@@ -1542,6 +1557,89 @@ mod test_valid_file_error {
     }
 }
 
+#[derive(Error, Debug, PartialEq)]
+pub enum WriteError {
+    #[error("Version is not defined")]
+    NoVersion,
+    #[error("Name is not defined")]
+    NoName,
+    #[error("Data array {0} has no name")]
+    NoDataName(usize),
+    #[error("Data array {0} has no format")]
+    NoDataFormat(usize),
+    #[error("Var has no name")]
+    NoVarName,
+    #[error("Data array {2} has different length real and imaginary components ({0} != {1})")]
+    RealImagDoNotMatch(usize, usize, usize),
+    #[error("Cannot write record to `{0}`")]
+    CannotWrite(PathBuf),
+}
+type WriteResult<T> = std::result::Result<T, WriteError>;
+
+
+#[cfg(test)]
+mod test_write_result {
+    use super::*;
+
+    mod test_display {
+        use super::*;
+
+        #[test]
+        fn no_version() {
+            let error = WriteError::NoVersion;
+            assert_eq!(format!("{}", error), "Version is not defined");
+        }
+
+        #[test]
+        fn no_name() {
+            let error = WriteError::NoName;
+            assert_eq!(format!("{}", error), "Name is not defined");
+        }
+
+        #[test]
+        fn no_data_name() {
+            let error = WriteError::NoDataName(1);
+            assert_eq!(format!("{}", error), "Data array 1 has no name");
+        }
+
+        #[test]
+        fn no_data_name_second() {
+            let error = WriteError::NoDataName(2);
+            assert_eq!(format!("{}", error), "Data array 2 has no name");
+        }
+
+        #[test]
+        fn no_data_format() {
+            let error = WriteError::NoDataFormat(1);
+            assert_eq!(format!("{}", error), "Data array 1 has no format");
+        }
+
+        #[test]
+        fn no_data_format_second() {
+            let error = WriteError::NoDataFormat(2);
+            assert_eq!(format!("{}", error), "Data array 2 has no format");
+        }
+
+        #[test]
+        fn no_var_name() {
+            let error = WriteError::NoVarName;
+            assert_eq!(format!("{}", error), "Var has no name");
+        }
+
+        #[test]
+        fn real_image_do_not_match() {
+            let error = WriteError::RealImagDoNotMatch(0, 1, 2);
+            assert_eq!(format!("{}", error), "Data array 2 has different length real and imaginary components (0 != 1)");
+        }
+
+        #[test]
+        fn cannot_write() {
+            let error = WriteError::CannotWrite(Path::new("/temp").to_path_buf());
+            assert_eq!(format!("{}", error), "Cannot write record to `/temp`");
+        }
+    }
+}
+
 impl Record {
     pub fn new(version: &str, name: &str) -> Record {
         Record {
@@ -1564,7 +1662,128 @@ impl Record {
                 state = state.process_keyword(keyword)?;
             }
         }
-        Ok(state.file.validate_file()?)
+        Ok(state.record.validate_record()?)
+    }
+
+    pub fn write<P: AsRef<Path>>(&self, path: &P)  -> Result<()> {
+        let mut buffer = std::io::BufWriter::new(std::fs::File::create(path).map_err(|_| WriteError::CannotWrite(path.as_ref().to_path_buf()))?);
+        let keywords = self.get_keywords()?;
+        
+        for keyword in keywords.iter() {
+            writeln!(&mut buffer, "{}", keyword).map_err(|_| WriteError::CannotWrite(path.as_ref().to_path_buf()))?;
+        }
+
+        Ok(())
+    }
+
+    fn get_data_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        let mut keywords: Vec<Keywords> = vec![];
+
+        // Add each array
+        for (i, array) in self.data.iter().enumerate() {
+            keywords.push(Keywords::Begin);
+
+            // Check lengths
+            if array.real.len() != array.imag.len() {
+                return Err(WriteError::RealImagDoNotMatch(array.real.len(), array.imag.len(), i));
+            }
+
+            for (&real, &imag) in array.real.iter().zip(array.imag.iter()) {
+                keywords.push(Keywords::DataPair{real: real, imag: imag});
+            }
+            keywords.push(Keywords::End);
+        }
+
+        Ok(keywords)
+    }
+
+    fn get_data_defines_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        let mut keywords: Vec<Keywords> = vec![];
+
+        for (i, array) in self.data.iter().enumerate() {
+            match (&array.name, &array.format) {
+                (Some(ref n), Some(ref f)) => keywords.push(Keywords::Data{name: n.clone(), format: f.clone()}),
+                (None, _) => return Err(WriteError::NoDataName(i)),
+                (_, None) => return Err(WriteError::NoDataFormat(i)),
+            }
+        }
+        Ok(keywords)
+    }
+
+    fn get_version_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        match self.header.version {
+            Some(ref v) => Ok(vec![Keywords::CITIFile{version: v.clone()}]),
+            None => Err(WriteError::NoVersion),
+        }
+    }
+
+    fn get_name_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        match self.header.name {
+            Some(ref v) => Ok(vec![Keywords::Name(v.clone())]),
+            None => Err(WriteError::NoName),
+        }
+    }
+
+    fn get_comments_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        Ok(self.header.comments.iter().map(|s| Keywords::Comment(s.clone())).collect())
+    }
+
+    fn get_devices_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        let mut keywords: Vec<Keywords> = vec![];
+
+        for device in self.header.devices.iter() {
+            for entry in device.entries.iter() {
+                keywords.push(Keywords::Device{name: device.name.clone(), value: entry.clone()});
+            }
+        }
+
+        Ok(keywords)
+    }
+
+    fn get_independent_variable_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        match self.header.independent_variable.name {
+            Some(ref n) => Ok(vec![Keywords::Var{
+                name: n.clone(),
+                format: self.header.independent_variable.format.clone(),
+                length: self.header.independent_variable.data.len()
+            }]),
+            None => Err(WriteError::NoVarName)
+        }
+    }
+
+    fn get_var_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        let mut keywords: Vec<Keywords> = vec![];
+
+        // Do not set if length == 0
+        if self.header.independent_variable.data.len() > 0 {
+            keywords.push(Keywords::VarListBegin);
+            for &v in self.header.independent_variable.data.iter() {
+                keywords.push(Keywords::VarListItem(v));
+            }
+            keywords.push(Keywords::VarListEnd);
+        }
+
+        Ok(keywords)
+    }
+
+    fn get_constants_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        Ok(self.header.constants.iter().map(|c| Keywords::Constant{name: c.name.clone(), value: c.value.clone()}).collect())
+    }
+
+    fn get_keywords(&self) -> WriteResult<Vec<Keywords>> {
+        let mut keywords: Vec<Keywords> = vec![];
+
+        keywords.append(&mut self.get_version_keywords()?);
+        keywords.append(&mut self.get_name_keywords()?);
+        keywords.append(&mut self.get_independent_variable_keywords()?);
+        keywords.append(&mut self.get_var_keywords()?);
+        keywords.append(&mut self.get_constants_keywords()?);
+        keywords.append(&mut self.get_comments_keywords()?);
+        keywords.append(&mut self.get_devices_keywords()?);
+        keywords.append(&mut self.get_data_defines_keywords()?);
+        keywords.append(&mut self.get_data_keywords()?);
+
+        Ok(keywords)
     }
 
     #[cfg(test)]
@@ -1575,7 +1794,7 @@ impl Record {
         }
     }
 
-    pub fn validate_file(self) -> ValidRecordResult<Self> {
+    pub fn validate_record(self) -> ValidRecordResult<Self> {
         self.has_name()?
             .has_version()?
             .has_var()?
@@ -1643,8 +1862,411 @@ impl Record {
 }
 
 #[cfg(test)]
-mod test_file {
+mod test_record {
     use super::*;
+
+    #[test]
+    fn write_gives_error_on_bad_file() {
+        let record = Record::default();
+        assert_eq!(record.write(&Path::new("")), Err(Error::WriteError(WriteError::CannotWrite(Path::new("").to_path_buf()))));
+    }
+
+    mod test_write {
+        use super::*;
+
+        #[test]
+        fn get_keywords() {
+            let mut record = Record::default();
+            record.header.constants.push(Constant{name: String::from("Const Name"), value: String::from("Value")});
+            record.header.independent_variable = Var{name: Some(String::from("Var Name")), format: Some(String::from("Format")), data: vec![1.]};
+            record.header.devices.push(Device{name: String::from("Name A"), entries: vec![String::from("entry 1"), String::from("entry 2")]});
+            record.header.comments.push(String::from("A Comment"));
+            record.header.name = Some(String::from("Name"));
+            record.header.version = Some(String::from("A.01.00"));
+            record.data.push(DataArray{name: Some(String::from("Data Name A")), format: Some(String::from("Format A")), real: vec![1.], imag: vec![2.]});
+            record.data.push(DataArray{name: Some(String::from("Data Name B")), format: Some(String::from("Format B")), real: vec![3., 4.], imag: vec![5., 6.]});
+
+            let keywords = record.get_keywords();
+            assert_eq!(keywords, Ok(vec![
+                Keywords::CITIFile{version: String::from("A.01.00")},
+                Keywords::Name(String::from("Name")),
+                Keywords::Var{name: String::from("Var Name"), format: Some(String::from("Format")), length: 1},
+                Keywords::VarListBegin,
+                Keywords::VarListItem(1.),
+                Keywords::VarListEnd,
+                Keywords::Constant{name: String::from("Const Name"), value: String::from("Value")},
+                Keywords::Comment(String::from("A Comment")),
+                Keywords::Device{name: String::from("Name A"), value: String::from("entry 1")},
+                Keywords::Device{name: String::from("Name A"), value: String::from("entry 2")},
+                Keywords::Data{name: String::from("Data Name A"), format: String::from("Format A")},
+                Keywords::Data{name: String::from("Data Name B"), format: String::from("Format B")},
+                Keywords::Begin,
+                Keywords::DataPair{real: 1., imag: 2.},
+                Keywords::End,
+                Keywords::Begin,
+                Keywords::DataPair{real: 3., imag: 5.},
+                Keywords::DataPair{real: 4., imag: 6.},
+                Keywords::End,
+            ]));
+        }
+
+        mod test_get_var_keywords {
+            use super::*;
+
+            #[test]
+            fn empty() {
+                let record = Record::default();
+                let keywords = record.get_var_keywords();
+                assert_eq!(keywords, Ok(vec![]));
+            }
+
+            #[test]
+            fn one() {
+                let mut record = Record::default();
+                record.header.independent_variable.data.push(1.);
+                let keywords = record.get_var_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::VarListBegin,
+                    Keywords::VarListItem(1.),
+                    Keywords::VarListEnd
+                ]));
+            }
+
+            #[test]
+            fn multiple() {
+                let mut record = Record::default();
+                record.header.independent_variable.data.push(1.);
+                record.header.independent_variable.data.push(2.);
+                record.header.independent_variable.data.push(3.);
+                let keywords = record.get_var_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::VarListBegin,
+                    Keywords::VarListItem(1.),
+                    Keywords::VarListItem(2.),
+                    Keywords::VarListItem(3.),
+                    Keywords::VarListEnd
+                ]));
+            }
+        }
+
+        mod test_get_constants_keywords {
+            use super::*;
+
+            #[test]
+            fn empty() {
+                let record = Record::default();
+                let keywords = record.get_constants_keywords();
+                assert_eq!(keywords, Ok(vec![]));
+            }
+
+            #[test]
+            fn one() {
+                let mut record = Record::default();
+                record.header.constants.push(Constant{name: String::from("Name"), value: String::from("Value")});
+                let keywords = record.get_constants_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Constant{name: String::from("Name"), value: String::from("Value")}
+                ]));
+            }
+
+            #[test]
+            fn two() {
+                let mut record = Record::default();
+                record.header.constants.push(Constant{name: String::from("Name A"), value: String::from("Value A")});
+                record.header.constants.push(Constant{name: String::from("Name B"), value: String::from("Value B")});
+                let keywords = record.get_constants_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Constant{name: String::from("Name A"), value: String::from("Value A")},
+                    Keywords::Constant{name: String::from("Name B"), value: String::from("Value B")}
+                ]));
+            }
+        }
+
+        mod test_get_independent_variable_keywords {
+            use super::*;
+
+            #[test]
+            fn no_name() {
+                let record = Record::default();
+                let keywords = record.get_independent_variable_keywords();
+                assert_eq!(keywords, Err(WriteError::NoVarName));
+            }
+
+            #[test]
+            fn no_format() {
+                let mut record = Record::default();
+                record.header.independent_variable.name = Some(String::from("Name"));
+                let keywords = record.get_independent_variable_keywords();
+                assert_eq!(keywords, Ok(vec![Keywords::Var{
+                    name: String::from("Name"),
+                    format: None,
+                    length: 0
+                }]));
+            }
+
+            #[test]
+            fn format() {
+                let mut record = Record::default();
+                record.header.independent_variable.name = Some(String::from("Name"));
+                record.header.independent_variable.format = Some(String::from("Format"));
+                let keywords = record.get_independent_variable_keywords();
+                assert_eq!(keywords, Ok(vec![Keywords::Var{
+                    name: String::from("Name"),
+                    format: Some(String::from("Format")),
+                    length: 0
+                }]));
+            }
+
+            #[test]
+            fn length() {
+                let mut record = Record::default();
+                record.header.independent_variable.name = Some(String::from("Name"));
+                record.header.independent_variable.format = Some(String::from("Format"));
+                record.header.independent_variable.data = vec![0.; 10];
+                let keywords = record.get_independent_variable_keywords();
+                assert_eq!(keywords, Ok(vec![Keywords::Var{
+                    name: String::from("Name"),
+                    format: Some(String::from("Format")),
+                    length: 10
+                }]));
+            }
+        }
+
+        mod test_get_devices_keywords {
+            use super::*;
+
+            #[test]
+            fn empty() {
+                let record = Record::default();
+                let keywords = record.get_devices_keywords();
+                assert_eq!(keywords, Ok(vec![]));
+            }
+
+            #[test]
+            fn one_device_no_entry() {
+                let mut record = Record::default();
+                record.header.devices.push(Device{name: String::from(""), entries: vec![]});
+                let keywords = record.get_devices_keywords();
+                assert_eq!(keywords, Ok(vec![]));
+            }
+
+            #[test]
+            fn one_device() {
+                let mut record = Record::default();
+                record.header.devices.push(Device{name: String::from("Name"), entries: vec![String::from("entry")]});
+                let keywords = record.get_devices_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Device{name: String::from("Name"), value: String::from("entry")}
+                ]));
+            }
+
+            #[test]
+            fn one_device_multiple_entries() {
+                let mut record = Record::default();
+                record.header.devices.push(Device{name: String::from("Name"), entries: vec![String::from("entry 1"), String::from("entry 2")]});
+                let keywords = record.get_devices_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Device{name: String::from("Name"), value: String::from("entry 1")},
+                    Keywords::Device{name: String::from("Name"), value: String::from("entry 2")}
+                ]));
+            }
+
+            #[test]
+            fn multiple_devices() {
+                let mut record = Record::default();
+                record.header.devices.push(Device{name: String::from("Name A"), entries: vec![String::from("entry 1")]});
+                record.header.devices.push(Device{name: String::from("Name B"), entries: vec![String::from("entry 2")]});
+                let keywords = record.get_devices_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Device{name: String::from("Name A"), value: String::from("entry 1")},
+                    Keywords::Device{name: String::from("Name B"), value: String::from("entry 2")}
+                ]));
+            }
+        }
+
+        mod test_get_comments_keywords {
+            use super::*;
+
+            #[test]
+            fn empty() {
+                let record = Record::default();
+                let keywords = record.get_comments_keywords();
+                assert_eq!(keywords, Ok(vec![]));
+            }
+
+            #[test]
+            fn one() {
+                let mut record = Record::default();
+                record.header.comments.push(String::from("A Comment"));
+                let keywords = record.get_comments_keywords();
+                assert_eq!(keywords, Ok(vec![Keywords::Comment(String::from("A Comment"))]));
+            }
+
+            #[test]
+            fn multiple() {
+                let mut record = Record::default();
+                record.header.comments.push(String::from("A Comment"));
+                record.header.comments.push(String::from("B Comment"));
+                let keywords = record.get_comments_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Comment(String::from("A Comment")),
+                    Keywords::Comment(String::from("B Comment"))
+                ]));
+            }
+        }
+
+        mod test_get_name_keywords {
+            use super::*;
+
+            #[test]
+            fn none() {
+                let mut record = Record::default();
+                record.header.name = None;
+                let keywords = record.get_name_keywords();
+                assert_eq!(keywords, Err(WriteError::NoName));
+            }
+
+            #[test]
+            fn some() {
+                let mut record = Record::default();
+                record.header.name = Some(String::from("A.01.00"));
+                let keywords = record.get_name_keywords();
+                assert_eq!(keywords, Ok(vec![Keywords::Name(String::from("A.01.00"))]));
+            }
+        }
+
+        mod test_get_version_keywords {
+            use super::*;
+
+            #[test]
+            fn none() {
+                let mut record = Record::default();
+                record.header.version = None;
+                let keywords = record.get_version_keywords();
+                assert_eq!(keywords, Err(WriteError::NoVersion));
+            }
+
+            #[test]
+            fn some() {
+                let mut record = Record::default();
+                record.header.version = Some(String::from("A.01.00"));
+                let keywords = record.get_version_keywords();
+                assert_eq!(keywords, Ok(vec![Keywords::CITIFile{version: String::from("A.01.00")}]));
+            }
+        }
+
+        mod test_get_data_keywords {
+            use super::*;
+
+            #[test]
+            fn many_values() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: None, format: None, real: vec![1., 2., -3.], imag: vec![4., 1e-6, 0.]});
+                let keywords = record.get_data_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Begin,
+                    Keywords::DataPair{real: 1., imag: 4.},
+                    Keywords::DataPair{real: 2., imag: 1e-6},
+                    Keywords::DataPair{real: -3., imag: 0.},
+                    Keywords::End
+                ]));
+            }
+
+            #[test]
+            fn one_array_gives_correct_result() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: None, format: None, real: vec![1.], imag: vec![2.]});
+                let keywords = record.get_data_keywords();
+                assert_eq!(keywords, Ok(vec![Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End]));
+            }
+
+            #[test]
+            fn multiple_array_gives_correct_result() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: None, format: None, real: vec![1.], imag: vec![2.]});
+                record.data.push(DataArray{name: None, format: None, real: vec![3.], imag: vec![4.]});
+                let keywords = record.get_data_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End,
+                    Keywords::Begin, Keywords::DataPair{real: 3., imag: 4.}, Keywords::End
+                ]));
+            }
+
+            #[test]
+            fn no_arrays_gives_empty() {
+                let record = Record::default();
+                let keywords = record.get_data_keywords();
+                assert_eq!(keywords, Ok(vec![]));
+            }
+
+            #[test]
+            fn bad_real_imag_gives_error() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: None, format: None, real: vec![1., 2.], imag: vec![1.]});
+                let keywords = record.get_data_keywords();
+                assert_eq!(keywords, Err(WriteError::RealImagDoNotMatch(2, 1, 0)));
+            }
+
+            #[test]
+            fn bad_real_imag_gives_error_with_correct_array_count() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: None, format: None, real: vec![1., 2.], imag: vec![1., 2.]});
+                record.data.push(DataArray{name: None, format: None, real: vec![1., 2., 3.], imag: vec![1., 2.]});
+                let keywords = record.get_data_keywords();
+                assert_eq!(keywords, Err(WriteError::RealImagDoNotMatch(3, 2, 1)));
+            }
+        }
+
+        mod test_get_data_defines_keywords {
+            use super::*;
+
+            #[test]
+            fn one_entry() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: Some(String::from("Name")), format: Some(String::from("Format")), real: vec![], imag: vec![]});
+                let keywords = record.get_data_defines_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Data{name: String::from("Name"), format: String::from("Format")}
+                ]));
+            }
+
+            #[test]
+            fn multiple() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: Some(String::from("Name A")), format: Some(String::from("Format A")), real: vec![], imag: vec![]});
+                record.data.push(DataArray{name: Some(String::from("Name B")), format: Some(String::from("Format B")), real: vec![], imag: vec![]});
+                let keywords = record.get_data_defines_keywords();
+                assert_eq!(keywords, Ok(vec![
+                    Keywords::Data{name: String::from("Name A"), format: String::from("Format A")},
+                    Keywords::Data{name: String::from("Name B"), format: String::from("Format B")}
+                ]));
+            }
+
+            #[test]
+            fn no_name() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: None, format: Some(String::from("")), real: vec![], imag: vec![]});
+                let keywords = record.get_data_defines_keywords();
+                assert_eq!(keywords, Err(WriteError::NoDataName(0)));
+            }
+
+            #[test]
+            fn no_format() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: Some(String::from("")), format: None, real: vec![], imag: vec![]});
+                let keywords = record.get_data_defines_keywords();
+                assert_eq!(keywords, Err(WriteError::NoDataFormat(0)));
+            }
+
+            #[test]
+            fn no_name_no_format() {
+                let mut record = Record::default();
+                record.data.push(DataArray{name: None, format: None, real: vec![], imag: vec![]});
+                let keywords = record.get_data_defines_keywords();
+                assert_eq!(keywords, Err(WriteError::NoDataName(0)));
+            }
+        }
+    }
 
     #[cfg(test)]
     mod test_read {
@@ -1652,7 +2274,7 @@ mod test_file {
         use approx::*;
 
         #[test]
-        fn cannot_read_empty_file() {
+        fn cannot_read_empty_record() {
             let expected = Err(Error::ValidRecordError(ValidRecordError::NoName));
             let contents = "";
             let result = Record::read_str(contents);
@@ -1669,7 +2291,7 @@ mod test_file {
         }
 
         #[cfg(test)]
-        mod test_read_minimal_file {
+        mod test_read_minimal_record {
             use super::*;
 
             fn setup() -> Result<Record> {
@@ -1680,7 +2302,7 @@ mod test_file {
             #[test]
             fn name() {
                 match setup() {
-                    Ok(file) => assert_eq!(file.header.name, Some(String::from("MEMORY"))),
+                    Ok(record) => assert_eq!(record.header.name, Some(String::from("MEMORY"))),
                     Err(_) => panic!("File could not be read"),
                 }
             }
@@ -1688,7 +2310,7 @@ mod test_file {
             #[test]
             fn version() {
                 match setup() {
-                    Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.00"))),
+                    Ok(record) => assert_eq!(record.header.version, Some(String::from("A.01.00"))),
                     Err(_) => panic!("File could not be read"),
                 }
             }
@@ -1696,7 +2318,7 @@ mod test_file {
             #[test]
             fn comments() {
                 match setup() {
-                    Ok(file) => assert_eq!(file.header.comments.len(), 0),
+                    Ok(record) => assert_eq!(record.header.comments.len(), 0),
                     Err(_) => panic!("File could not be read"),
                 }
             }
@@ -1704,7 +2326,7 @@ mod test_file {
             #[test]
             fn constants() {
                 match setup() {
-                    Ok(file) => assert_eq!(file.header.constants.len(), 0),
+                    Ok(record) => assert_eq!(record.header.constants.len(), 0),
                     Err(_) => panic!("File could not be read"),
                 }
             }
@@ -1712,7 +2334,7 @@ mod test_file {
             #[test]
             fn devices() {
                 match setup() {
-                    Ok(file) => assert_eq!(file.header.devices.len(), 0),
+                    Ok(record) => assert_eq!(record.header.devices.len(), 0),
                     Err(_) => panic!("File could not be read"),
                 }
             }
@@ -1720,10 +2342,10 @@ mod test_file {
             #[test]
             fn independent_variable() {
                 match setup() {
-                    Ok(file) => {
-                        assert_eq!(file.header.independent_variable.name, Some(String::from("FREQ")));
-                        assert_eq!(file.header.independent_variable.format, Some(String::from("MAG")));
-                        assert_eq!(file.header.independent_variable.data.len(), 0);
+                    Ok(record) => {
+                        assert_eq!(record.header.independent_variable.name, Some(String::from("FREQ")));
+                        assert_eq!(record.header.independent_variable.format, Some(String::from("MAG")));
+                        assert_eq!(record.header.independent_variable.data.len(), 0);
                     },
                     Err(_) => panic!("File could not be read"),
                 }
@@ -1732,18 +2354,18 @@ mod test_file {
             #[test]
             fn data() {
                 match setup() {
-                    Ok(file) => {
-                        assert_eq!(file.data.len(), 1);
-                        assert_eq!(file.data[0].name, Some(String::from("S")));
-                        assert_eq!(file.data[0].format, Some(String::from("RI")));
-                        assert_eq!(file.data[0].real.len(), 3);
-                        assert_eq!(file.data[0].imag.len(), 3);
-                        assert_relative_eq!(file.data[0].real[0], -0.0354545);
-                        assert_relative_eq!(file.data[0].real[1], 0.00023491);
-                        assert_relative_eq!(file.data[0].real[2], 0.00200382);
-                        assert_relative_eq!(file.data[0].imag[0], -0.00138601);
-                        assert_relative_eq!(file.data[0].imag[1], -0.00139883);
-                        assert_relative_eq!(file.data[0].imag[2], -0.00140022);
+                    Ok(record) => {
+                        assert_eq!(record.data.len(), 1);
+                        assert_eq!(record.data[0].name, Some(String::from("S")));
+                        assert_eq!(record.data[0].format, Some(String::from("RI")));
+                        assert_eq!(record.data[0].real.len(), 3);
+                        assert_eq!(record.data[0].imag.len(), 3);
+                        assert_relative_eq!(record.data[0].real[0], -0.0354545);
+                        assert_relative_eq!(record.data[0].real[1], 0.00023491);
+                        assert_relative_eq!(record.data[0].real[2], 0.00200382);
+                        assert_relative_eq!(record.data[0].imag[0], -0.00138601);
+                        assert_relative_eq!(record.data[0].imag[1], -0.00139883);
+                        assert_relative_eq!(record.data[0].imag[2], -0.00140022);
                     },
                     Err(_) => panic!("File could not be read"),
                 }
@@ -1752,70 +2374,70 @@ mod test_file {
     }
 
     #[cfg(test)]
-    mod test_validate_file {
+    mod test_validate_record {
         use super::*;
 
-        fn create_valid_file() -> Record {
-            let mut file = Record::blank();
-            file.header.name = Some(String::from("CAL_SET"));
-            file.header.version = Some(String::from("A.01.00"));
-            file.data.push(DataArray::new("E", "RI"));
-            file.header.independent_variable.name = Some(String::from("FREQ"));
-            file
+        fn create_valid_record() -> Record {
+            let mut record = Record::blank();
+            record.header.name = Some(String::from("CAL_SET"));
+            record.header.version = Some(String::from("A.01.00"));
+            record.data.push(DataArray::new("E", "RI"));
+            record.header.independent_variable.name = Some(String::from("FREQ"));
+            record
         }
 
         #[test]
-        fn test_valid_file() {
-            let file = create_valid_file();
-            assert_eq!(Ok(create_valid_file()), file.validate_file());
+        fn test_valid_record() {
+            let record = create_valid_record();
+            assert_eq!(Ok(create_valid_record()), record.validate_record());
         }
 
         #[test]
         fn test_no_data() {
-            let mut file = create_valid_file();
-            file.data = vec![];
-            assert_eq!(Err(ValidRecordError::NoData), file.validate_file());
+            let mut record = create_valid_record();
+            record.data = vec![];
+            assert_eq!(Err(ValidRecordError::NoData), record.validate_record());
         }
 
         #[test]
         fn test_no_version() {
-            let mut file = create_valid_file();
-            file.header.version = None;
-            assert_eq!(Err(ValidRecordError::NoVersion), file.validate_file());
+            let mut record = create_valid_record();
+            record.header.version = None;
+            assert_eq!(Err(ValidRecordError::NoVersion), record.validate_record());
         }
 
         #[test]
         fn test_no_name() {
-            let mut file = create_valid_file();
-            file.header.name = None;
-            assert_eq!(Err(ValidRecordError::NoName), file.validate_file());
+            let mut record = create_valid_record();
+            record.header.name = None;
+            assert_eq!(Err(ValidRecordError::NoName), record.validate_record());
         }
 
         #[test]
         fn test_no_var() {
-            let mut file = create_valid_file();
-            file.header.independent_variable.name = None;
-            assert_eq!(Err(ValidRecordError::NoIndependentVariable), file.validate_file());
+            let mut record = create_valid_record();
+            record.header.independent_variable.name = None;
+            assert_eq!(Err(ValidRecordError::NoIndependentVariable), record.validate_record());
         }
 
         #[test]
         fn test_var_and_data_different() {
-            let mut file = create_valid_file();
-            file.header.independent_variable.data = vec![1.];
-            assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 0, 0)), file.validate_file());
+            let mut record = create_valid_record();
+            record.header.independent_variable.data = vec![1.];
+            assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 0, 0)), record.validate_record());
         }
 
         #[test]
         fn test_real_imag_do_not_match() {
-            let mut file = create_valid_file();
-            file.data[0] = DataArray{
+            let mut record = create_valid_record();
+            record.data[0] = DataArray{
                 name: None,
                 format: None,
                 real: vec![1., 2., 3.],
                 imag: vec![1., 2., 3., 4.],
             };
-            file.header.independent_variable.data = vec![1., 2., 3.];
-            assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 4, 0)), file.validate_file());
+            record.header.independent_variable.data = vec![1., 2., 3.];
+            assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 4, 0)), record.validate_record());
         }
 
         #[cfg(test)]
@@ -1824,17 +2446,17 @@ mod test_file {
 
             #[test]
             fn fail_on_no_version() {
-                let file = Record::blank();
-                assert_eq!(Err(ValidRecordError::NoData), file.has_data());
+                let record = Record::blank();
+                assert_eq!(Err(ValidRecordError::NoData), record.has_data());
             }
 
             #[test]
             fn pass_on_name() {
                 let mut expected = Record::blank();
                 expected.data.push(DataArray::new("E", "RI"));
-                let mut file = Record::blank();
-                file.data.push(DataArray::new("E", "RI"));
-                assert_eq!(Ok(expected), file.has_data());
+                let mut record = Record::blank();
+                record.data.push(DataArray::new("E", "RI"));
+                assert_eq!(Ok(expected), record.has_data());
             }
         }
 
@@ -1844,17 +2466,17 @@ mod test_file {
 
             #[test]
             fn fail_on_no_version() {
-                let file = Record::blank();
-                assert_eq!(Err(ValidRecordError::NoIndependentVariable), file.has_var());
+                let record = Record::blank();
+                assert_eq!(Err(ValidRecordError::NoIndependentVariable), record.has_var());
             }
 
             #[test]
             fn pass_on_name() {
                 let mut expected = Record::blank();
                 expected.header.independent_variable.name = Some(String::from("FREQ"));
-                let mut file = Record::blank();
-                file.header.independent_variable.name = Some(String::from("FREQ"));
-                assert_eq!(Ok(expected), file.has_var());
+                let mut record = Record::blank();
+                record.header.independent_variable.name = Some(String::from("FREQ"));
+                assert_eq!(Ok(expected), record.has_var());
             }
         }
 
@@ -1864,17 +2486,17 @@ mod test_file {
 
             #[test]
             fn fail_on_no_version() {
-                let file = Record::blank();
-                assert_eq!(Err(ValidRecordError::NoVersion), file.has_version());
+                let record = Record::blank();
+                assert_eq!(Err(ValidRecordError::NoVersion), record.has_version());
             }
 
             #[test]
             fn pass_on_name() {
                 let mut expected = Record::blank();
                 expected.header.version = Some(String::from("A.01.00"));
-                let mut file = Record::blank();
-                file.header.version = Some(String::from("A.01.00"));
-                assert_eq!(Ok(expected), file.has_version());
+                let mut record = Record::blank();
+                record.header.version = Some(String::from("A.01.00"));
+                assert_eq!(Ok(expected), record.has_version());
             }
         }
 
@@ -1884,17 +2506,17 @@ mod test_file {
 
             #[test]
             fn fail_on_no_name() {
-                let file = Record::blank();
-                assert_eq!(Err(ValidRecordError::NoName), file.has_name());
+                let record = Record::blank();
+                assert_eq!(Err(ValidRecordError::NoName), record.has_name());
             }
 
             #[test]
             fn pass_on_name() {
                 let mut expected = Record::blank();
                 expected.header.name = Some(String::from("CAL_SET"));
-                let mut file = Record::blank();
-                file.header.name = Some(String::from("CAL_SET"));
-                assert_eq!(Ok(expected), file.has_name());
+                let mut record = Record::blank();
+                record.header.name = Some(String::from("CAL_SET"));
+                assert_eq!(Ok(expected), record.has_name());
             }
         }
 
@@ -1904,65 +2526,65 @@ mod test_file {
 
             #[test]
             fn pass_on_blank() {
-                let file = Record::blank();
-                assert_eq!(Ok(Record::blank()), file.var_and_data_same_length());
+                let record = Record::blank();
+                assert_eq!(Ok(Record::blank()), record.var_and_data_same_length());
             }
 
             #[test]
             fn pass_on_equal() {
-                let mut file = Record::blank();
-                file.data.push(DataArray{
+                let mut record = Record::blank();
+                record.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1.],
                     imag: vec![1.],
                 });
-                file.header.independent_variable.data = vec![1.];
-                assert_eq!(Ok(file.clone()), file.var_and_data_same_length());
+                record.header.independent_variable.data = vec![1.];
+                assert_eq!(Ok(record.clone()), record.var_and_data_same_length());
             }
 
             #[test]
             fn pass_on_var_zero_data_some() {
-                let mut file = Record::blank();
-                file.data.push(DataArray{
+                let mut record = Record::blank();
+                record.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Ok(file.clone()), file.var_and_data_same_length());
+                assert_eq!(Ok(record.clone()), record.var_and_data_same_length());
             }
 
             #[test]
             fn fail_on_var_one_data_some() {
-                let mut file = Record::blank();
-                file.data.push(DataArray{
+                let mut record = Record::blank();
+                record.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2.],
                     imag: vec![1., 2.],
                 });
-                file.header.independent_variable.data = vec![1.];
-                assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 0)), file.var_and_data_same_length());
+                record.header.independent_variable.data = vec![1.];
+                assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 0)), record.var_and_data_same_length());
             }
 
             #[test]
             fn error_formatted_correctely() {
-                let mut file = Record::blank();
-                file.data.push(DataArray{
+                let mut record = Record::blank();
+                record.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1.],
                     imag: vec![1.],
                 });
-                file.data.push(DataArray{
+                record.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2.],
                     imag: vec![1., 2.],
                 });
-                file.header.independent_variable.data = vec![1.];
-                assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 1)), file.var_and_data_same_length());
+                record.header.independent_variable.data = vec![1.];
+                assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 1)), record.var_and_data_same_length());
             }
         }
 
@@ -1972,50 +2594,50 @@ mod test_file {
 
             #[test]
             fn fail_on_different_double_array() {
-                let mut file = Record::blank();
-                file.data.push(DataArray{
+                let mut record = Record::blank();
+                record.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![],
                     imag: vec![],
                 });
-                file.data.push(DataArray{
+                record.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2., 3.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 2, 1)), file.data_real_image_same_length());
+                assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 2, 1)), record.data_real_image_same_length());
             }
 
             #[test]
             fn fail_on_different() {
-                let mut file = Record::blank();
-                file.data.push(DataArray{
+                let mut record = Record::blank();
+                record.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2., 3.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 2, 0)), file.data_real_image_same_length());
+                assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 2, 0)), record.data_real_image_same_length());
             }
 
             #[test]
             fn pass_on_empty() {
-                let file = Record::blank();
-                assert_eq!(Ok(file.clone()), file.data_real_image_same_length());
+                let record = Record::blank();
+                assert_eq!(Ok(record.clone()), record.data_real_image_same_length());
             }
 
             #[test]
             fn pass_on_equal() {
-                let mut file = Record::blank();
-                file.data.push(DataArray{
+                let mut record = Record::blank();
+                record.data.push(DataArray{
                     name: None,
                     format: None,
                     real: vec![1., 2.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Ok(file.clone()), file.data_real_image_same_length());
+                assert_eq!(Ok(record.clone()), record.data_real_image_same_length());
             }
         }
     }
@@ -2080,9 +2702,9 @@ pub enum ReaderError {
     IndependentVariableDefinedTwice,
     #[error("Single use keyword `{0}` defined twice")]
     SingleUseKeywordDefinedTwice(Keywords),
-    #[error("Keyword `{0}` is out of order in the file")]
+    #[error("Keyword `{0}` is out of order in the record")]
     OutOfOrderKeyword(Keywords),
-    #[error("Cannot open file `{0}`")]
+    #[error("Cannot open record `{0}`")]
     CannotOpen(PathBuf),
     #[error("Error on line {0}: {1}")]
     LineError(usize, ParseError),
@@ -2117,13 +2739,13 @@ mod test_reader_error {
         #[test]
         fn out_of_order_keyword() {
             let error = ReaderError::OutOfOrderKeyword(Keywords::Begin);
-            assert_eq!(format!("{}", error), "Keyword `BEGIN` is out of order in the file");
+            assert_eq!(format!("{}", error), "Keyword `BEGIN` is out of order in the record");
         }
 
         #[test]
         fn cannot_open() {
             let error = ReaderError::CannotOpen(Path::new("/temp").to_path_buf());
-            assert_eq!(format!("{}", error), "Cannot open file `/temp`");
+            assert_eq!(format!("{}", error), "Cannot open record `/temp`");
         }
 
         #[test]
@@ -2143,10 +2765,10 @@ enum RecordReaderStates {
     SeqList,
 }
 
-/// Represents state in a CITI file reader FSM
+/// Represents state in a CITI record reader FSM
 #[derive(Debug, PartialEq)]
 struct RecordReaderState {
-    file: Record,
+    record: Record,
     state: RecordReaderStates,
     data_array_counter: usize,
     independent_variable_already_read: bool,
@@ -2155,7 +2777,7 @@ struct RecordReaderState {
 impl RecordReaderState {
     pub fn new() -> RecordReaderState {
         RecordReaderState {
-            file: Record {
+            record: Record {
                 header: Header::blank(),
                 data: vec![],
             },
@@ -2177,41 +2799,41 @@ impl RecordReaderState {
     fn state_header(mut self, keyword: Keywords) -> ReaderResult<Self> {
         match keyword {
             Keywords::CITIFile{version} => {
-                match self.file.header.version {
+                match self.record.header.version {
                     Some(_) => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})),
                     None => {
-                        self.file.header.version = Some(version);
+                        self.record.header.version = Some(version);
                         Ok(self)
                     }
                 }
             },
             Keywords::Name(name) => {
-                match self.file.header.name {
+                match self.record.header.name {
                     Some(_) => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(name))),
                     None => {
-                        self.file.header.name = Some(name);
+                        self.record.header.name = Some(name);
                         Ok(self)
                     }
                 }
             },
             Keywords::Device{name, value} => {
-                self.file.header.add_device(&name, &value);
+                self.record.header.add_device(&name, &value);
                 Ok(self)
             },
             Keywords::Comment(comment) => {
-                self.file.header.comments.push(comment);
+                self.record.header.comments.push(comment);
                 Ok(self)
             },
             Keywords::Constant{name, value} => {
-                self.file.header.constants.push(Constant::new(&name, &value));
+                self.record.header.constants.push(Constant::new(&name, &value));
                 Ok(self)
             },
             Keywords::Var{name, format, length} => {
-                match self.file.header.independent_variable.name {
+                match self.record.header.independent_variable.name {
                     Some(_) => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})),
                     None => {
-                        self.file.header.independent_variable.name = Some(name);
-                        self.file.header.independent_variable.format = format;
+                        self.record.header.independent_variable.name = Some(name);
+                        self.record.header.independent_variable.format = format;
                         Ok(self)
                     },
                 }
@@ -2239,7 +2861,7 @@ impl RecordReaderState {
                 Ok(self)
             },
             Keywords::Data{name, format} => {
-                self.file.data.push(DataArray::new(&name, &format));
+                self.record.data.push(DataArray::new(&name, &format));
                 Ok(self)
             },
             _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
@@ -2249,8 +2871,8 @@ impl RecordReaderState {
     fn state_data(mut self, keyword: Keywords) -> ReaderResult<Self> {
         match keyword {
             Keywords::DataPair{real, imag} => {
-                if self.data_array_counter < self.file.data.len() {
-                    self.file.data[self.data_array_counter].add_sample(real, imag);
+                if self.data_array_counter < self.record.data.len() {
+                    self.record.data[self.data_array_counter].add_sample(real, imag);
                     Ok(self)
                 } else {
                     Err(ReaderError::DataArrayOverIndex)
@@ -2268,7 +2890,7 @@ impl RecordReaderState {
     fn state_var_list(mut self, keyword: Keywords) -> ReaderResult<Self> {
         match keyword {
             Keywords::VarListItem(value) => {
-                self.file.header.independent_variable.push(value);
+                self.record.header.independent_variable.push(value);
                 Ok(self)
             },
             Keywords::VarListEnd => {
@@ -2283,7 +2905,7 @@ impl RecordReaderState {
     fn state_seq_list(mut self, keyword: Keywords) -> ReaderResult<Self> {
         match keyword {
             Keywords::SegItem{first, last, number} => {
-                self.file.header.independent_variable.seq(first, last, number);
+                self.record.header.independent_variable.seq(first, last, number);
                 Ok(self)
             },
             Keywords::SegListEnd => {
@@ -2297,13 +2919,13 @@ impl RecordReaderState {
 }
 
 #[cfg(test)]
-mod test_file_reader_state {
+mod test_record_reader_state {
     use super::*;
 
     #[test]
     fn test_new() {
         let expected = RecordReaderState{
-            file: Record {
+            record: Record {
                 header: Header {
                     version: None,
                     name: None,
@@ -2336,12 +2958,12 @@ mod test_file_reader_state {
             }
 
             #[test]
-            fn citifile() {
+            fn citirecord() {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.version, Some(String::from("A.01.01")));
+                        assert_eq!(s.record.header.version, Some(String::from("A.01.01")));
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2349,10 +2971,10 @@ mod test_file_reader_state {
             }
 
             #[test]
-            fn citifile_cannot_be_called_twice() {
+            fn citirecord_cannot_be_called_twice() {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let mut state = initialize_state();
-                state.file.header.version = Some(String::from("A.01.01"));
+                state.record.header.version = Some(String::from("A.01.01"));
                 assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
             }
 
@@ -2362,7 +2984,7 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.name, Some(String::from("Name")));
+                        assert_eq!(s.record.header.name, Some(String::from("Name")));
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2373,7 +2995,7 @@ mod test_file_reader_state {
             fn name_cannot_be_called_twice() {
                 let keyword = Keywords::Name(String::from("CAL_SET"));
                 let mut state = initialize_state();
-                state.file.header.name = Some(String::from("CAL_SET"));
+                state.record.header.name = Some(String::from("CAL_SET"));
                 assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(String::from("CAL_SET")))), state.process_keyword(keyword));
             }
 
@@ -2383,8 +3005,8 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.independent_variable.name, Some(String::from("Name")));
-                        assert_eq!(s.file.header.independent_variable.format, None);
+                        assert_eq!(s.record.header.independent_variable.name, Some(String::from("Name")));
+                        assert_eq!(s.record.header.independent_variable.format, None);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2397,8 +3019,8 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.independent_variable.name, Some(String::from("Name")));
-                        assert_eq!(s.file.header.independent_variable.format, Some(String::from("MAG")));
+                        assert_eq!(s.record.header.independent_variable.name, Some(String::from("Name")));
+                        assert_eq!(s.record.header.independent_variable.format, Some(String::from("MAG")));
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2409,7 +3031,7 @@ mod test_file_reader_state {
             fn var_cannot_be_called_twice() {
                 let keyword = Keywords::Var{name: String::from("FREQ"), format: None, length: 102};
                 let mut state = initialize_state();
-                state.file.header.independent_variable.name = Some(String::from("Name"));
+                state.record.header.independent_variable.name = Some(String::from("Name"));
                 assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name: String::from("FREQ"), format: None, length: 102})), state.process_keyword(keyword));
             }
 
@@ -2417,7 +3039,7 @@ mod test_file_reader_state {
             fn var_cannot_be_called_twice_none_format() {
                 let keyword = Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102};
                 let mut state = initialize_state();
-                state.file.header.independent_variable.name = Some(String::from("Name"));
+                state.record.header.independent_variable.name = Some(String::from("Name"));
                 assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
             }
 
@@ -2427,7 +3049,7 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.constants, vec![Constant::new("Name", "Value")]);
+                        assert_eq!(s.record.header.constants, vec![Constant::new("Name", "Value")]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2438,10 +3060,10 @@ mod test_file_reader_state {
             fn constant_exists() {
                 let keyword = Keywords::Constant{name: String::from("New Name"), value: String::from("New Value")};
                 let mut state = initialize_state();
-                state.file.header.constants.push(Constant::new("Name", "Value"));
+                state.record.header.constants.push(Constant::new("Name", "Value"));
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.constants, vec![Constant::new("Name", "Value"), Constant::new("New Name", "New Value")]);
+                        assert_eq!(s.record.header.constants, vec![Constant::new("Name", "Value"), Constant::new("New Name", "New Value")]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2454,8 +3076,8 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.devices.len(), 1);
-                        assert_eq!(s.file.header.devices[0], Device{name: String::from("NA"), entries: vec![String::from("Value")]});
+                        assert_eq!(s.record.header.devices.len(), 1);
+                        assert_eq!(s.record.header.devices[0], Device{name: String::from("NA"), entries: vec![String::from("Value")]});
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2466,12 +3088,12 @@ mod test_file_reader_state {
             fn device_with_existing_device() {
                 let keyword = Keywords::Device{name: String::from("WVI"), value: String::from("1904")};
                 let mut state = initialize_state();
-                state.file.header.add_device("NA", "Value");
+                state.record.header.add_device("NA", "Value");
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.devices.len(), 2);
-                        assert_eq!(s.file.header.devices[0], Device{name: String::from("NA"), entries: vec![String::from("Value")]});
-                        assert_eq!(s.file.header.devices[1], Device{name: String::from("WVI"), entries: vec![String::from("1904")]});
+                        assert_eq!(s.record.header.devices.len(), 2);
+                        assert_eq!(s.record.header.devices[0], Device{name: String::from("NA"), entries: vec![String::from("Value")]});
+                        assert_eq!(s.record.header.devices[1], Device{name: String::from("WVI"), entries: vec![String::from("1904")]});
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2541,7 +3163,7 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.data, vec![DataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}]);
+                        assert_eq!(s.record.data, vec![DataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2552,10 +3174,10 @@ mod test_file_reader_state {
             fn data_with_already_existing() {
                 let keyword = Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
                 let mut state = initialize_state();
-                state.file.data.push(DataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]});
+                state.record.data.push(DataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]});
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.data, vec![
+                        assert_eq!(s.record.data, vec![
                             DataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]},
                             DataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}
                         ]);
@@ -2598,7 +3220,7 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.comments, vec![String::from("Comment")]);
+                        assert_eq!(s.record.header.comments, vec![String::from("Comment")]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2609,10 +3231,10 @@ mod test_file_reader_state {
             fn comment_with_existing() {
                 let keyword = Keywords::Comment(String::from("Comment"));
                 let mut state = initialize_state();
-                state.file.header.comments.push(String::from("Comment First"));
+                state.record.header.comments.push(String::from("Comment First"));
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.comments, vec![String::from("Comment First"), String::from("Comment")]);
+                        assert_eq!(s.record.header.comments, vec![String::from("Comment First"), String::from("Comment")]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(_) => panic!(),
@@ -2632,12 +3254,12 @@ mod test_file_reader_state {
                     state: RecordReaderStates::Data,
                     .. RecordReaderState::new()
                 };
-                state.file.data.push(DataArray::blank());
+                state.record.data.push(DataArray::blank());
                 state
             }
 
             #[test]
-            fn citifile() {
+            fn citirecord() {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
@@ -2740,8 +3362,8 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.data[0].real, vec![1.]);
-                        assert_eq!(s.file.data[0].imag, vec![2.]);
+                        assert_eq!(s.record.data[0].real, vec![1.]);
+                        assert_eq!(s.record.data[0].imag, vec![2.]);
                         assert_eq!(s.state, RecordReaderStates::Data);
                     },
                     Err(_) => panic!(),
@@ -2752,14 +3374,14 @@ mod test_file_reader_state {
             fn data_pair_second_array() {
                 let keyword = Keywords::DataPair{real: 1., imag: 2.};
                 let mut state = initialize_state();
-                state.file.data.push(DataArray::blank());
+                state.record.data.push(DataArray::blank());
                 state.data_array_counter = 1;
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.data[0].real, vec![]);
-                        assert_eq!(s.file.data[0].imag, vec![]);
-                        assert_eq!(s.file.data[1].real, vec![1.]);
-                        assert_eq!(s.file.data[1].imag, vec![2.]);
+                        assert_eq!(s.record.data[0].real, vec![]);
+                        assert_eq!(s.record.data[0].imag, vec![]);
+                        assert_eq!(s.record.data[1].real, vec![1.]);
+                        assert_eq!(s.record.data[1].imag, vec![2.]);
                         assert_eq!(s.state, RecordReaderStates::Data);
                     },
                     Err(_) => panic!(),
@@ -2831,7 +3453,7 @@ mod test_file_reader_state {
             }
 
             #[test]
-            fn citifile() {
+            fn citirecord() {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
@@ -2906,7 +3528,7 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.independent_variable.data, vec![1.]);
+                        assert_eq!(s.record.header.independent_variable.data, vec![1.]);
                         assert_eq!(s.state, RecordReaderStates::VarList);
                     },
                     Err(_) => panic!(),
@@ -2919,7 +3541,7 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.independent_variable.data, vec![1e9]);
+                        assert_eq!(s.record.header.independent_variable.data, vec![1e9]);
                         assert_eq!(s.state, RecordReaderStates::VarList);
                     },
                     Err(_) => panic!(),
@@ -2930,10 +3552,10 @@ mod test_file_reader_state {
             fn var_list_item_already_exists() {
                 let keyword = Keywords::VarListItem(1e9);
                 let mut state = initialize_state();
-                state.file.header.independent_variable.push(1e8);
+                state.record.header.independent_variable.push(1e8);
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.independent_variable.data, vec![1e8, 1e9]);
+                        assert_eq!(s.record.header.independent_variable.data, vec![1e8, 1e9]);
                         assert_eq!(s.state, RecordReaderStates::VarList);
                     },
                     Err(_) => panic!(),
@@ -3004,7 +3626,7 @@ mod test_file_reader_state {
             }
 
             #[test]
-            fn citifile() {
+            fn citirecord() {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
@@ -3058,7 +3680,7 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.independent_variable.data, vec![10., 100.]);
+                        assert_eq!(s.record.header.independent_variable.data, vec![10., 100.]);
                         assert_eq!(s.state, RecordReaderStates::SeqList);
                     },
                     Err(_) => panic!(),
@@ -3071,7 +3693,7 @@ mod test_file_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.file.header.independent_variable.data, vec![10., 55., 100.]);
+                        assert_eq!(s.record.header.independent_variable.data, vec![10., 55., 100.]);
                         assert_eq!(s.state, RecordReaderStates::SeqList);
                     },
                     Err(_) => panic!(),

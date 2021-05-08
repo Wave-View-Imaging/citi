@@ -41,46 +41,23 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::fmt;
 use std::path::{Path,PathBuf};
-use std::io::Write;
+use std::io::{BufReader, BufRead};
+use std::fs::File;
 
 use thiserror::Error;
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug)]
 pub enum Error {
     #[error("Parsing error: `{0}`")]
-    ParseError(ParseError),
+    ParseError(#[from] ParseError),
     #[error("Reading error: `{0}`")]
-    ReaderError(ReaderError),
+    ReaderError(#[from] ReaderError),
     #[error("Invalid record error: `{0}`")]
-    ValidRecordError(ValidRecordError),
+    ValidRecordError(#[from] ValidRecordError),
     #[error("Error writing record: `{0}`")]
-    WriteError(WriteError),
+    WriteError(#[from] WriteError)
 }
 pub type Result<T> = std::result::Result<T, Error>;
-
-impl From<ParseError> for Error {
-    fn from(error: ParseError) -> Self {
-        Error::ParseError(error)
-    }
-}
-
-impl From<ReaderError> for Error {
-    fn from(error: ReaderError) -> Self {
-        Error::ReaderError(error)
-    }
-}
-
-impl From<ValidRecordError> for Error {
-    fn from(error: ValidRecordError) -> Self {
-        Error::ValidRecordError(error)
-    }
-}
-
-impl From<WriteError> for Error {
-    fn from(error: WriteError) -> Self {
-        Error::WriteError(error)
-    }
-}
 
 #[cfg(test)]
 mod test_error {
@@ -119,31 +96,39 @@ mod test_error {
 
         #[test]
         fn from_parse_error() {
-            let expected = Error::ParseError(ParseError::BadRegex);
-            let input_error = ParseError::BadRegex;
-            let result = Error::from(input_error);
-            assert_eq!(result, expected);
+            match Error::from(ParseError::BadRegex) {
+                Error::ParseError(ParseError::BadRegex) => (),
+                _ => panic!("Incorrect from parse error"),
+            }
         }
 
         #[test]
         fn from_reader_error() {
-            let expected = Error::ReaderError(ReaderError::DataArrayOverIndex);
-            let input_error = ReaderError::DataArrayOverIndex;
-            let result = Error::from(input_error);
-            assert_eq!(result, expected);
+            match Error::from(ReaderError::DataArrayOverIndex) {
+                Error::ReaderError(ReaderError::DataArrayOverIndex) => (),
+                _ => panic!("Incorrect from reader error"),
+            }
         }
 
         #[test]
         fn from_valid_record_error() {
-            let expected = Error::ValidRecordError(ValidRecordError::NoName);
-            let input_error = ValidRecordError::NoName;
-            let result = Error::from(input_error);
-            assert_eq!(result, expected);
+            match Error::from(ValidRecordError::NoName) {
+                Error::ValidRecordError(ValidRecordError::NoName) => (),
+                _ => panic!("Incorrect from valid error"),
+            }
+        }
+
+        #[test]
+        fn from_write_error() {
+            match Error::from(WriteError::NoVersion) {
+                Error::WriteError(WriteError::NoVersion) => (),
+                _ => panic!("Incorrect from write error"),
+            }
         }
     }
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug)]
 pub enum ParseError {
     #[error("Keyword `{0}` is not supported")]
     BadKeyword(String),
@@ -506,241 +491,297 @@ mod test_keywords {
 
         #[test]
         fn fails_on_bad_string() {
-            let keyword = Keywords::from_str("this is a bad string");
-            assert_eq!(keyword, Err(ParseError::BadKeyword(String::from("this is a bad string"))));
+            match Keywords::from_str("this is a bad string") {
+                Err(ParseError::BadKeyword(bad_string)) => assert_eq!(bad_string, "this is a bad string"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn citirecord_a_01_00() {
-            let keyword = Keywords::from_str("CITIFILE A.01.00");
-            assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.00")}));
+            match Keywords::from_str("CITIFILE A.01.00") {
+                Ok(Keywords::CITIFile{version}) => assert_eq!(version, "A.01.00"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn citirecord_a_01_01() {
-            let keyword = Keywords::from_str("CITIFILE A.01.01");
-            assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.01")}));
+            match Keywords::from_str("CITIFILE A.01.01") {
+                Ok(Keywords::CITIFile{version}) => assert_eq!(version, "A.01.01"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn name_cal_set() {
-            let keyword = Keywords::from_str("NAME CAL_SET");
-            assert_eq!(keyword, Ok(Keywords::Name(String::from("CAL_SET"))));
+            match Keywords::from_str("NAME CAL_SET") {
+                Ok(Keywords::Name(name)) => assert_eq!(name, "CAL_SET"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn name_raw_data() {
-            let keyword = Keywords::from_str("NAME RAW_DATA");
-            assert_eq!(keyword, Ok(Keywords::Name(String::from("RAW_DATA"))));
+            match Keywords::from_str("NAME RAW_DATA") {
+                Ok(Keywords::Name(name)) => assert_eq!(name, "RAW_DATA"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn constant() {
-            let keyword = Keywords::from_str("CONSTANT A_CONSTANT 1.2345");
-            assert_eq!(keyword, Ok(Keywords::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")}));
+            match Keywords::from_str("CONSTANT A_CONSTANT 1.2345") {
+                Ok(Keywords::Constant{name, value}) => {
+                    assert_eq!(name, "A_CONSTANT");
+                    assert_eq!(value, "1.2345");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn device() {
-            let keyword = Keywords::from_str("#NA REGISTER 1");
-            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("NA"), value: String::from("REGISTER 1")}));
+            match Keywords::from_str("#NA REGISTER 1") {
+                Ok(Keywords::Device{name, value}) => {
+                    assert_eq!(name, "NA");
+                    assert_eq!(value, "REGISTER 1");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn device_number() {
-            let keyword = Keywords::from_str("#NA POWER2 1.0E1");
-            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")}));
+            match Keywords::from_str("#NA POWER2 1.0E1") {
+                Ok(Keywords::Device{name, value}) => {
+                    assert_eq!(name, "NA");
+                    assert_eq!(value, "POWER2 1.0E1");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn device_name() {
-            let keyword = Keywords::from_str("#WVI A B");
-            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("WVI"), value: String::from("A B")}));
+            match Keywords::from_str("#WVI A B") {
+                Ok(Keywords::Device{name, value}) => {
+                    assert_eq!(name, "WVI");
+                    assert_eq!(value, "A B");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn var_standard() {
-            let keyword = Keywords::from_str("VAR FREQ MAG 201");
-            assert_eq!(keyword, Ok(Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 201}));
+            match Keywords::from_str("VAR FREQ MAG 201") {
+                Ok(Keywords::Var{name, format, length}) => {
+                    assert_eq!(name, "FREQ");
+                    assert_eq!(format, Some(String::from("MAG")));
+                    assert_eq!(length, 201);
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn var_no_format() {
-            let keyword = Keywords::from_str("VAR FREQ 202");
-            assert_eq!(keyword, Ok(Keywords::Var{name: String::from("FREQ"), format: None, length: 202}));
+            match Keywords::from_str("VAR FREQ 202") {
+                Ok(Keywords::Var{name, format, length}) => {
+                    assert_eq!(name, "FREQ");
+                    assert_eq!(format, None);
+                    assert_eq!(length, 202);
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn seg_list_begin() {
-            let keyword = Keywords::from_str("SEG_LIST_BEGIN");
-            assert_eq!(keyword, Ok(Keywords::SegListBegin));
+            match Keywords::from_str("SEG_LIST_BEGIN") {
+                Ok(Keywords::SegListBegin) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn seg_item() {
-            let keyword = Keywords::from_str("SEG 1000000000 4000000000 10");
-            match keyword {
+            match Keywords::from_str("SEG 1000000000 4000000000 10") {
                 Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1000000000.);
                     assert_relative_eq!(last, 4000000000.);
                     assert_eq!(number, 10);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn seg_item_exponential() {
-            let keyword = Keywords::from_str("SEG 1e9 1E4 100");
-            match keyword {
+            match Keywords::from_str("SEG 1e9 1E4 100") {
                 Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1e9);
                     assert_relative_eq!(last, 1e4);
                     assert_eq!(number, 100);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn seg_item_negative() {
-            let keyword = Keywords::from_str("SEG -1e9 1E-4 1");
-            match keyword {
+            match Keywords::from_str("SEG -1e9 1E-4 1") {
                 Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, -1e9);
                     assert_relative_eq!(last, 1e-4);
                     assert_eq!(number, 1);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn seg_list_end() {
-            let keyword = Keywords::from_str("SEG_LIST_END");
-            assert_eq!(keyword, Ok(Keywords::SegListEnd));
+            match Keywords::from_str("SEG_LIST_END") {
+                Ok(Keywords::SegListEnd) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn var_list_begin() {
-            let keyword = Keywords::from_str("VAR_LIST_BEGIN");
-            assert_eq!(keyword, Ok(Keywords::VarListBegin));
+            match Keywords::from_str("VAR_LIST_BEGIN") {
+                Ok(Keywords::VarListBegin) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn var_item() {
-            let keyword = Keywords::from_str("100000");
-            match keyword {
+            match Keywords::from_str("100000") {
                 Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, 100000.);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_item_exponential() {
-            let keyword = Keywords::from_str("100E+6");
-            match keyword {
+            match Keywords::from_str("100E+6") {
                 Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, 100E+6);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_item_negative_exponential() {
-            let keyword = Keywords::from_str("-1e-2");
-            match keyword {
+            match Keywords::from_str("-1e-2") {
                 Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, -1e-2);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_item_negative() {
-            let keyword = Keywords::from_str("-100000");
-            match keyword {
+            match Keywords::from_str("-100000") {
                 Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, -100000.);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_list_end() {
-            let keyword = Keywords::from_str("VAR_LIST_END");
-            assert_eq!(keyword, Ok(Keywords::VarListEnd));
+            match Keywords::from_str("VAR_LIST_END") {
+                Ok(Keywords::VarListEnd) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn data_s11() {
-            let keyword = Keywords::from_str("DATA S[1,1] RI");
-            assert_eq!(keyword, Ok(Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")}));
+            match Keywords::from_str("DATA S[1,1] RI") {
+                Ok(Keywords::Data{name, format}) => {
+                    assert_eq!(name, "S[1,1]");
+                    assert_eq!(format, "RI");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn data_e() {
-            let keyword = Keywords::from_str("DATA E RI");
-            assert_eq!(keyword, Ok(Keywords::Data{name: String::from("E"), format: String::from("RI")}));
+            match Keywords::from_str("DATA E RI") {
+                Ok(Keywords::Data{name, format}) => {
+                    assert_eq!(name, "E");
+                    assert_eq!(format, "RI");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn data_pair_simple() {
-            let keyword = Keywords::from_str("1E9,-1E9");
-            match keyword {
+            match Keywords::from_str("1E9,-1E9") {
                 Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 1e9);
                     assert_relative_eq!(imag, -1e9);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn data_pair() {
-            let keyword = Keywords::from_str("8.6303E-2,-8.98651E-1");
-            match keyword {
+            match Keywords::from_str("8.6303E-2,-8.98651E-1") {
                 Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn data_pair_spaced() {
-            let keyword = Keywords::from_str("8.6303E-2, -8.98651E-1");
-            match keyword {
+            match Keywords::from_str("8.6303E-2, -8.98651E-1") {
                 Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn begin() {
-            let keyword = Keywords::from_str("BEGIN");
-            assert_eq!(keyword, Ok(Keywords::Begin));
+            match Keywords::from_str("BEGIN") {
+                Ok(Keywords::Begin) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn end() {
-            let keyword = Keywords::from_str("END");
-            assert_eq!(keyword, Ok(Keywords::End));
+            match Keywords::from_str("END") {
+                Ok(Keywords::End) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn comment() {
-            let keyword = Keywords::from_str("!DATE: 2019.11.01");
-            assert_eq!(keyword, Ok(Keywords::Comment(String::from("DATE: 2019.11.01"))));
+            match Keywords::from_str("!DATE: 2019.11.01") {
+                Ok(Keywords::Comment(s)) => assert_eq!(s, "DATE: 2019.11.01"),
+                e => panic!("{:?}", e),
+            }
         }
     }
 
@@ -751,241 +792,297 @@ mod test_keywords {
 
         #[test]
         fn fails_on_bad_string() {
-            let keyword = Keywords::try_from("this is a bad string");
-            assert_eq!(keyword, Err(ParseError::BadKeyword(String::from("this is a bad string"))));
+            match Keywords::try_from("this is a bad string") {
+                Err(ParseError::BadKeyword(bad_string)) => assert_eq!(bad_string, "this is a bad string"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn citirecord_a_01_00() {
-            let keyword = Keywords::try_from("CITIFILE A.01.00");
-            assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.00")}));
+            match Keywords::try_from("CITIFILE A.01.00") {
+                Ok(Keywords::CITIFile{version}) => assert_eq!(version, "A.01.00"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn citirecord_a_01_01() {
-            let keyword = Keywords::try_from("CITIFILE A.01.01");
-            assert_eq!(keyword, Ok(Keywords::CITIFile{version: String::from("A.01.01")}));
+            match Keywords::try_from("CITIFILE A.01.01") {
+                Ok(Keywords::CITIFile{version}) => assert_eq!(version, "A.01.01"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn name_cal_set() {
-            let keyword = Keywords::try_from("NAME CAL_SET");
-            assert_eq!(keyword, Ok(Keywords::Name(String::from("CAL_SET"))));
+            match Keywords::try_from("NAME CAL_SET") {
+                Ok(Keywords::Name(name)) => assert_eq!(name, "CAL_SET"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn name_raw_data() {
-            let keyword = Keywords::try_from("NAME RAW_DATA");
-            assert_eq!(keyword, Ok(Keywords::Name(String::from("RAW_DATA"))));
+            match Keywords::try_from("NAME RAW_DATA") {
+                Ok(Keywords::Name(name)) => assert_eq!(name, "RAW_DATA"),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn constant() {
-            let keyword = Keywords::try_from("CONSTANT A_CONSTANT 1.2345");
-            assert_eq!(keyword, Ok(Keywords::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")}));
+            match Keywords::try_from("CONSTANT A_CONSTANT 1.2345") {
+                Ok(Keywords::Constant{name, value}) => {
+                    assert_eq!(name, "A_CONSTANT");
+                    assert_eq!(value, "1.2345");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn device() {
-            let keyword = Keywords::try_from("#NA REGISTER 1");
-            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("NA"), value: String::from("REGISTER 1")}));
+            match Keywords::try_from("#NA REGISTER 1") {
+                Ok(Keywords::Device{name, value}) => {
+                    assert_eq!(name, "NA");
+                    assert_eq!(value, "REGISTER 1");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn device_number() {
-            let keyword = Keywords::try_from("#NA POWER2 1.0E1");
-            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")}));
+            match Keywords::try_from("#NA POWER2 1.0E1") {
+                Ok(Keywords::Device{name, value}) => {
+                    assert_eq!(name, "NA");
+                    assert_eq!(value, "POWER2 1.0E1");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn device_name() {
-            let keyword = Keywords::try_from("#WVI A B");
-            assert_eq!(keyword, Ok(Keywords::Device{name: String::from("WVI"), value: String::from("A B")}));
+            match Keywords::try_from("#WVI A B") {
+                Ok(Keywords::Device{name, value}) => {
+                    assert_eq!(name, "WVI");
+                    assert_eq!(value, "A B");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn var_standard() {
-            let keyword = Keywords::try_from("VAR FREQ MAG 201");
-            assert_eq!(keyword, Ok(Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 201}));
+            match Keywords::try_from("VAR FREQ MAG 201") {
+                Ok(Keywords::Var{name, format, length}) => {
+                    assert_eq!(name, "FREQ");
+                    assert_eq!(format, Some(String::from("MAG")));
+                    assert_eq!(length, 201);
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn var_no_format() {
-            let keyword = Keywords::try_from("VAR FREQ 202");
-            assert_eq!(keyword, Ok(Keywords::Var{name: String::from("FREQ"), format: None, length: 202}));
+            match Keywords::try_from("VAR FREQ 202") {
+                Ok(Keywords::Var{name, format, length}) => {
+                    assert_eq!(name, "FREQ");
+                    assert_eq!(format, None);
+                    assert_eq!(length, 202);
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn seg_list_begin() {
-            let keyword = Keywords::try_from("SEG_LIST_BEGIN");
-            assert_eq!(keyword, Ok(Keywords::SegListBegin));
+            match Keywords::try_from("SEG_LIST_BEGIN") {
+                Ok(Keywords::SegListBegin) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn seg_item() {
-            let keyword = Keywords::try_from("SEG 1000000000 4000000000 10");
-            match keyword {
+            match Keywords::try_from("SEG 1000000000 4000000000 10") {
                 Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1000000000.);
                     assert_relative_eq!(last, 4000000000.);
                     assert_eq!(number, 10);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn seg_item_exponential() {
-            let keyword = Keywords::try_from("SEG 1e9 1E4 100");
-            match keyword {
+            match Keywords::try_from("SEG 1e9 1E4 100") {
                 Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1e9);
                     assert_relative_eq!(last, 1e4);
                     assert_eq!(number, 100);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn seg_item_negative() {
-            let keyword = Keywords::try_from("SEG -1e9 1E-4 1");
-            match keyword {
+            match Keywords::try_from("SEG -1e9 1E-4 1") {
                 Ok(Keywords::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, -1e9);
                     assert_relative_eq!(last, 1e-4);
                     assert_eq!(number, 1);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn seg_list_end() {
-            let keyword = Keywords::try_from("SEG_LIST_END");
-            assert_eq!(keyword, Ok(Keywords::SegListEnd));
+            match Keywords::try_from("SEG_LIST_END") {
+                Ok(Keywords::SegListEnd) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn var_list_begin() {
-            let keyword = Keywords::try_from("VAR_LIST_BEGIN");
-            assert_eq!(keyword, Ok(Keywords::VarListBegin));
+            match Keywords::try_from("VAR_LIST_BEGIN") {
+                Ok(Keywords::VarListBegin) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn var_item() {
-            let keyword = Keywords::try_from("100000");
-            match keyword {
+            match Keywords::try_from("100000") {
                 Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, 100000.);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_item_exponential() {
-            let keyword = Keywords::try_from("100E+6");
-            match keyword {
+            match Keywords::try_from("100E+6") {
                 Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, 100E+6);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_item_negative_exponential() {
-            let keyword = Keywords::try_from("-1e-2");
-            match keyword {
+            match Keywords::try_from("-1e-2") {
                 Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, -1e-2);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_item_negative() {
-            let keyword = Keywords::try_from("-100000");
-            match keyword {
+            match Keywords::try_from("-100000") {
                 Ok(Keywords::VarListItem(value)) => {
                     assert_relative_eq!(value, -100000.);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_list_end() {
-            let keyword = Keywords::try_from("VAR_LIST_END");
-            assert_eq!(keyword, Ok(Keywords::VarListEnd));
+            match Keywords::try_from("VAR_LIST_END") {
+                Ok(Keywords::VarListEnd) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn data_s11() {
-            let keyword = Keywords::try_from("DATA S[1,1] RI");
-            assert_eq!(keyword, Ok(Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")}));
+            match Keywords::try_from("DATA S[1,1] RI") {
+                Ok(Keywords::Data{name, format}) => {
+                    assert_eq!(name, "S[1,1]");
+                    assert_eq!(format, "RI");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn data_e() {
-            let keyword = Keywords::try_from("DATA E RI");
-            assert_eq!(keyword, Ok(Keywords::Data{name: String::from("E"), format: String::from("RI")}));
+            match Keywords::try_from("DATA E RI") {
+                Ok(Keywords::Data{name, format}) => {
+                    assert_eq!(name, "E");
+                    assert_eq!(format, "RI");
+                },
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn data_pair_simple() {
-            let keyword = Keywords::try_from("1E9,-1E9");
-            match keyword {
+            match Keywords::try_from("1E9,-1E9") {
                 Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 1e9);
                     assert_relative_eq!(imag, -1e9);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn data_pair() {
-            let keyword = Keywords::try_from("8.6303E-2,-8.98651E-1");
-            match keyword {
+            match Keywords::try_from("8.6303E-2,-8.98651E-1") {
                 Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn data_pair_spaced() {
-            let keyword = Keywords::try_from("8.6303E-2, -8.98651E-1");
-            match keyword {
+            match Keywords::try_from("8.6303E-2, -8.98651E-1") {
                 Ok(Keywords::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
-                _ => panic!()
+                e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn begin() {
-            let keyword = Keywords::try_from("BEGIN");
-            assert_eq!(keyword, Ok(Keywords::Begin));
+            match Keywords::try_from("BEGIN") {
+                Ok(Keywords::Begin) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn end() {
-            let keyword = Keywords::try_from("END");
-            assert_eq!(keyword, Ok(Keywords::End));
+            match Keywords::try_from("END") {
+                Ok(Keywords::End) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn comment() {
-            let keyword = Keywords::try_from("!DATE: 2019.11.01");
-            assert_eq!(keyword, Ok(Keywords::Comment(String::from("DATE: 2019.11.01"))));
+            match Keywords::try_from("!DATE: 2019.11.01") {
+                Ok(Keywords::Comment(s)) => assert_eq!(s, "DATE: 2019.11.01"),
+                e => panic!("{:?}", e),
+            }
         }
     }
 }
@@ -1495,7 +1592,7 @@ impl Default for Record {
     }
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug)]
 pub enum ValidRecordError {
     #[error("Version is not defined")]
     NoVersion,
@@ -1557,7 +1654,7 @@ mod test_valid_record_error {
     }
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug)]
 pub enum WriteError {
     #[error("Version is not defined")]
     NoVersion,
@@ -1571,8 +1668,10 @@ pub enum WriteError {
     NoVarName,
     #[error("Data array {2} has different length real and imaginary components ({0} != {1})")]
     RealImagDoNotMatch(usize, usize, usize),
-    #[error("Cannot write record to `{0}`")]
-    CannotWrite(PathBuf),
+    #[error("Cannot write record to `{0}`: {1}")]
+    CannotWrite(PathBuf, std::io::Error),
+    #[error("Writing error occured: {0}")]
+    WrittingError(std::io::Error),
 }
 type WriteResult<T> = std::result::Result<T, WriteError>;
 
@@ -1634,8 +1733,14 @@ mod test_write_result {
 
         #[test]
         fn cannot_write() {
-            let error = WriteError::CannotWrite(Path::new("/temp").to_path_buf());
-            assert_eq!(format!("{}", error), "Cannot write record to `/temp`");
+            let error = WriteError::CannotWrite(Path::new("/temp").to_path_buf(), std::io::ErrorKind::NotFound.into());
+            assert_eq!(format!("{}", error), "Cannot write record to `/temp`: entity not found");
+        }
+
+        #[test]
+        fn writting_error() {
+            let error = WriteError::WrittingError(std::io::ErrorKind::NotFound.into());
+            assert_eq!(format!("{}", error), "Writing error occured: entity not found");
         }
     }
 }
@@ -1649,16 +1754,19 @@ impl Record {
     }
 
     pub fn read<P: AsRef<Path>>(path: &P)  -> Result<Record> {
-        let contents = std::fs::read_to_string(path).map_err(|_| ReaderError::CannotOpen(path.as_ref().to_path_buf()))?;
-        Record::read_str(&contents)
+        let mut file = File::open(path).map_err(|e| ReaderError::CannotOpen(path.as_ref().to_path_buf(), e))?;
+        Record::read_from_source(&mut file)
     }
 
-    fn read_str(contents: &str) -> Result<Record> {
+    pub fn read_from_source<R: std::io::Read>(reader: &mut R) -> Result<Record> {
+        let buf_reader = BufReader::new(reader);
         let mut state = RecordReaderState::new();
-        for (i, line) in contents.lines().enumerate() {
+
+        for (i, line) in buf_reader.lines().enumerate() {
+            let this_line = line.map_err(|e| ReaderError::ReadingError(e))?;
             // Filter out new lines
-            if line.len() > 0 {
-                let keyword = Keywords::try_from(line).map_err(|e| ReaderError::LineError(i, e))?;
+            if this_line.trim().len() > 0 {
+                let keyword = Keywords::from_str(&this_line).map_err(|e| ReaderError::LineError(i, e))?;
                 state = state.process_keyword(keyword)?;
             }
         }
@@ -1666,11 +1774,15 @@ impl Record {
     }
 
     pub fn write<P: AsRef<Path>>(&self, path: &P)  -> Result<()> {
-        let mut buffer = std::io::BufWriter::new(std::fs::File::create(path).map_err(|_| WriteError::CannotWrite(path.as_ref().to_path_buf()))?);
+        let mut buffer = std::io::BufWriter::new(std::fs::File::create(path).map_err(|e| WriteError::CannotWrite(path.as_ref().to_path_buf(), e))?);
+        self.write_to_sink(&mut buffer)
+    }
+
+    pub fn write_to_sink<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
         let keywords = self.get_keywords()?;
-        
+
         for keyword in keywords.iter() {
-            writeln!(&mut buffer, "{}", keyword).map_err(|_| WriteError::CannotWrite(path.as_ref().to_path_buf()))?;
+            writeln!(writer, "{}", keyword).map_err(|e| WriteError::WrittingError(e))?;
         }
 
         Ok(())
@@ -1868,7 +1980,10 @@ mod test_record {
     #[test]
     fn write_gives_error_on_bad_file() {
         let record = Record::default();
-        assert_eq!(record.write(&Path::new("")), Err(Error::WriteError(WriteError::CannotWrite(Path::new("").to_path_buf()))));
+        match record.write(&Path::new("")) {
+            Err(Error::WriteError(WriteError::CannotWrite(path, std::io::Error{..}))) => assert_eq!(path, Path::new("").to_path_buf()),
+            e => panic!("{:?}", e),
+        }
     }
 
     mod test_write {
@@ -1886,28 +2001,30 @@ mod test_record {
             record.data.push(DataArray{name: Some(String::from("Data Name A")), format: Some(String::from("Format A")), real: vec![1.], imag: vec![2.]});
             record.data.push(DataArray{name: Some(String::from("Data Name B")), format: Some(String::from("Format B")), real: vec![3., 4.], imag: vec![5., 6.]});
 
-            let keywords = record.get_keywords();
-            assert_eq!(keywords, Ok(vec![
-                Keywords::CITIFile{version: String::from("A.01.00")},
-                Keywords::Name(String::from("Name")),
-                Keywords::Var{name: String::from("Var Name"), format: Some(String::from("Format")), length: 1},
-                Keywords::VarListBegin,
-                Keywords::VarListItem(1.),
-                Keywords::VarListEnd,
-                Keywords::Constant{name: String::from("Const Name"), value: String::from("Value")},
-                Keywords::Comment(String::from("A Comment")),
-                Keywords::Device{name: String::from("Name A"), value: String::from("entry 1")},
-                Keywords::Device{name: String::from("Name A"), value: String::from("entry 2")},
-                Keywords::Data{name: String::from("Data Name A"), format: String::from("Format A")},
-                Keywords::Data{name: String::from("Data Name B"), format: String::from("Format B")},
-                Keywords::Begin,
-                Keywords::DataPair{real: 1., imag: 2.},
-                Keywords::End,
-                Keywords::Begin,
-                Keywords::DataPair{real: 3., imag: 5.},
-                Keywords::DataPair{real: 4., imag: 6.},
-                Keywords::End,
-            ]));
+            match record.get_keywords() {
+                Ok(v) => assert_eq!(v, vec![
+                    Keywords::CITIFile{version: String::from("A.01.00")},
+                    Keywords::Name(String::from("Name")),
+                    Keywords::Var{name: String::from("Var Name"), format: Some(String::from("Format")), length: 1},
+                    Keywords::VarListBegin,
+                    Keywords::VarListItem(1.),
+                    Keywords::VarListEnd,
+                    Keywords::Constant{name: String::from("Const Name"), value: String::from("Value")},
+                    Keywords::Comment(String::from("A Comment")),
+                    Keywords::Device{name: String::from("Name A"), value: String::from("entry 1")},
+                    Keywords::Device{name: String::from("Name A"), value: String::from("entry 2")},
+                    Keywords::Data{name: String::from("Data Name A"), format: String::from("Format A")},
+                    Keywords::Data{name: String::from("Data Name B"), format: String::from("Format B")},
+                    Keywords::Begin,
+                    Keywords::DataPair{real: 1., imag: 2.},
+                    Keywords::End,
+                    Keywords::Begin,
+                    Keywords::DataPair{real: 3., imag: 5.},
+                    Keywords::DataPair{real: 4., imag: 6.},
+                    Keywords::End,
+                ]),
+                e => panic!("{:?}", e),
+            }
         }
 
         mod test_get_var_keywords {
@@ -1916,20 +2033,24 @@ mod test_record {
             #[test]
             fn empty() {
                 let record = Record::default();
-                let keywords = record.get_var_keywords();
-                assert_eq!(keywords, Ok(vec![]));
+                match record.get_var_keywords() {
+                    Ok(v) => assert_eq!(v, vec![]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn one() {
                 let mut record = Record::default();
                 record.header.independent_variable.data.push(1.);
-                let keywords = record.get_var_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::VarListBegin,
-                    Keywords::VarListItem(1.),
-                    Keywords::VarListEnd
-                ]));
+                match record.get_var_keywords() {
+                    Ok(v) => assert_eq!(v, vec![
+                        Keywords::VarListBegin,
+                        Keywords::VarListItem(1.),
+                        Keywords::VarListEnd
+                    ]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -1938,14 +2059,16 @@ mod test_record {
                 record.header.independent_variable.data.push(1.);
                 record.header.independent_variable.data.push(2.);
                 record.header.independent_variable.data.push(3.);
-                let keywords = record.get_var_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::VarListBegin,
-                    Keywords::VarListItem(1.),
-                    Keywords::VarListItem(2.),
-                    Keywords::VarListItem(3.),
-                    Keywords::VarListEnd
-                ]));
+                match record.get_var_keywords() {
+                    Ok(v) => assert_eq!(v, vec![
+                        Keywords::VarListBegin,
+                        Keywords::VarListItem(1.),
+                        Keywords::VarListItem(2.),
+                        Keywords::VarListItem(3.),
+                        Keywords::VarListEnd
+                    ]),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -1955,18 +2078,20 @@ mod test_record {
             #[test]
             fn empty() {
                 let record = Record::default();
-                let keywords = record.get_constants_keywords();
-                assert_eq!(keywords, Ok(vec![]));
+                match record.get_constants_keywords() {
+                    Ok(v) => assert_eq!(v, vec![]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn one() {
                 let mut record = Record::default();
                 record.header.constants.push(Constant{name: String::from("Name"), value: String::from("Value")});
-                let keywords = record.get_constants_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Constant{name: String::from("Name"), value: String::from("Value")}
-                ]));
+                match record.get_constants_keywords() {
+                    Ok(v) => assert_eq!(v, vec![Keywords::Constant{name: String::from("Name"), value: String::from("Value")}]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -1974,11 +2099,13 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.constants.push(Constant{name: String::from("Name A"), value: String::from("Value A")});
                 record.header.constants.push(Constant{name: String::from("Name B"), value: String::from("Value B")});
-                let keywords = record.get_constants_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Constant{name: String::from("Name A"), value: String::from("Value A")},
-                    Keywords::Constant{name: String::from("Name B"), value: String::from("Value B")}
-                ]));
+                match record.get_constants_keywords(){
+                    Ok(v) => assert_eq!(v, vec![
+                        Keywords::Constant{name: String::from("Name A"), value: String::from("Value A")},
+                        Keywords::Constant{name: String::from("Name B"), value: String::from("Value B")}
+                    ]),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -1988,20 +2115,24 @@ mod test_record {
             #[test]
             fn no_name() {
                 let record = Record::default();
-                let keywords = record.get_independent_variable_keywords();
-                assert_eq!(keywords, Err(WriteError::NoVarName));
+                match record.get_independent_variable_keywords() {
+                    Err(WriteError::NoVarName) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn no_format() {
                 let mut record = Record::default();
                 record.header.independent_variable.name = Some(String::from("Name"));
-                let keywords = record.get_independent_variable_keywords();
-                assert_eq!(keywords, Ok(vec![Keywords::Var{
-                    name: String::from("Name"),
-                    format: None,
-                    length: 0
-                }]));
+                match record.get_independent_variable_keywords() {
+                    Ok(v) => assert_eq!(v, vec![Keywords::Var{
+                        name: String::from("Name"),
+                        format: None,
+                        length: 0
+                    }]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2009,12 +2140,14 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.independent_variable.name = Some(String::from("Name"));
                 record.header.independent_variable.format = Some(String::from("Format"));
-                let keywords = record.get_independent_variable_keywords();
-                assert_eq!(keywords, Ok(vec![Keywords::Var{
-                    name: String::from("Name"),
-                    format: Some(String::from("Format")),
-                    length: 0
-                }]));
+                match record.get_independent_variable_keywords() {
+                    Ok(v) => assert_eq!(v, vec![Keywords::Var{
+                        name: String::from("Name"),
+                        format: Some(String::from("Format")),
+                        length: 0
+                    }]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2023,12 +2156,14 @@ mod test_record {
                 record.header.independent_variable.name = Some(String::from("Name"));
                 record.header.independent_variable.format = Some(String::from("Format"));
                 record.header.independent_variable.data = vec![0.; 10];
-                let keywords = record.get_independent_variable_keywords();
-                assert_eq!(keywords, Ok(vec![Keywords::Var{
-                    name: String::from("Name"),
-                    format: Some(String::from("Format")),
-                    length: 10
-                }]));
+                match record.get_independent_variable_keywords() {
+                    Ok(v) => assert_eq!(v, vec![Keywords::Var{
+                        name: String::from("Name"),
+                        format: Some(String::from("Format")),
+                        length: 10
+                    }]),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2038,37 +2173,45 @@ mod test_record {
             #[test]
             fn empty() {
                 let record = Record::default();
-                let keywords = record.get_devices_keywords();
-                assert_eq!(keywords, Ok(vec![]));
+                match record.get_devices_keywords() {
+                    Ok(v) => assert_eq!(v, vec![]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn one_device_no_entry() {
                 let mut record = Record::default();
                 record.header.devices.push(Device{name: String::from(""), entries: vec![]});
-                let keywords = record.get_devices_keywords();
-                assert_eq!(keywords, Ok(vec![]));
+                match record.get_devices_keywords() {
+                    Ok(v) => assert_eq!(v, vec![]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn one_device() {
                 let mut record = Record::default();
                 record.header.devices.push(Device{name: String::from("Name"), entries: vec![String::from("entry")]});
-                let keywords = record.get_devices_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Device{name: String::from("Name"), value: String::from("entry")}
-                ]));
+                match record.get_devices_keywords() {
+                    Ok(v) => assert_eq!(v, vec![
+                        Keywords::Device{name: String::from("Name"), value: String::from("entry")}
+                    ]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn one_device_multiple_entries() {
                 let mut record = Record::default();
                 record.header.devices.push(Device{name: String::from("Name"), entries: vec![String::from("entry 1"), String::from("entry 2")]});
-                let keywords = record.get_devices_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Device{name: String::from("Name"), value: String::from("entry 1")},
-                    Keywords::Device{name: String::from("Name"), value: String::from("entry 2")}
-                ]));
+                match record.get_devices_keywords() {
+                    Ok(v) => assert_eq!(v, vec![
+                        Keywords::Device{name: String::from("Name"), value: String::from("entry 1")},
+                        Keywords::Device{name: String::from("Name"), value: String::from("entry 2")}
+                    ]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2076,11 +2219,13 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.devices.push(Device{name: String::from("Name A"), entries: vec![String::from("entry 1")]});
                 record.header.devices.push(Device{name: String::from("Name B"), entries: vec![String::from("entry 2")]});
-                let keywords = record.get_devices_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Device{name: String::from("Name A"), value: String::from("entry 1")},
-                    Keywords::Device{name: String::from("Name B"), value: String::from("entry 2")}
-                ]));
+                match record.get_devices_keywords() {
+                    Ok(v) => assert_eq!(v, vec![
+                        Keywords::Device{name: String::from("Name A"), value: String::from("entry 1")},
+                        Keywords::Device{name: String::from("Name B"), value: String::from("entry 2")}
+                    ]),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2090,16 +2235,20 @@ mod test_record {
             #[test]
             fn empty() {
                 let record = Record::default();
-                let keywords = record.get_comments_keywords();
-                assert_eq!(keywords, Ok(vec![]));
+                match record.get_comments_keywords() {
+                    Ok(v) => assert_eq!(v, vec![]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn one() {
                 let mut record = Record::default();
                 record.header.comments.push(String::from("A Comment"));
-                let keywords = record.get_comments_keywords();
-                assert_eq!(keywords, Ok(vec![Keywords::Comment(String::from("A Comment"))]));
+                match record.get_comments_keywords() {
+                    Ok(v) => assert_eq!(v, vec![Keywords::Comment(String::from("A Comment"))]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2107,11 +2256,13 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.comments.push(String::from("A Comment"));
                 record.header.comments.push(String::from("B Comment"));
-                let keywords = record.get_comments_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Comment(String::from("A Comment")),
-                    Keywords::Comment(String::from("B Comment"))
-                ]));
+                match record.get_comments_keywords() {
+                    Ok(v) => assert_eq!(v, vec![
+                        Keywords::Comment(String::from("A Comment")),
+                        Keywords::Comment(String::from("B Comment"))
+                    ]),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2122,16 +2273,20 @@ mod test_record {
             fn none() {
                 let mut record = Record::default();
                 record.header.name = None;
-                let keywords = record.get_name_keywords();
-                assert_eq!(keywords, Err(WriteError::NoName));
+                match record.get_name_keywords() {
+                    Err(WriteError::NoName) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn some() {
                 let mut record = Record::default();
                 record.header.name = Some(String::from("A.01.00"));
-                let keywords = record.get_name_keywords();
-                assert_eq!(keywords, Ok(vec![Keywords::Name(String::from("A.01.00"))]));
+                match record.get_name_keywords() {
+                    Ok(v) => assert_eq!(v, vec![Keywords::Name(String::from("A.01.00"))]),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2142,16 +2297,20 @@ mod test_record {
             fn none() {
                 let mut record = Record::default();
                 record.header.version = None;
-                let keywords = record.get_version_keywords();
-                assert_eq!(keywords, Err(WriteError::NoVersion));
+                match record.get_version_keywords() {
+                    Err(WriteError::NoVersion) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn some() {
                 let mut record = Record::default();
                 record.header.version = Some(String::from("A.01.00"));
-                let keywords = record.get_version_keywords();
-                assert_eq!(keywords, Ok(vec![Keywords::CITIFile{version: String::from("A.01.00")}]));
+                match record.get_version_keywords() {
+                    Ok(v) => assert_eq!(v, vec![Keywords::CITIFile{version: String::from("A.01.00")}]),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2162,22 +2321,26 @@ mod test_record {
             fn many_values() {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: None, format: None, real: vec![1., 2., -3.], imag: vec![4., 1e-6, 0.]});
-                let keywords = record.get_data_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Begin,
-                    Keywords::DataPair{real: 1., imag: 4.},
-                    Keywords::DataPair{real: 2., imag: 1e-6},
-                    Keywords::DataPair{real: -3., imag: 0.},
-                    Keywords::End
-                ]));
+                match record.get_data_keywords() {
+                    Ok(v) => assert_eq!(v, vec![
+                        Keywords::Begin,
+                        Keywords::DataPair{real: 1., imag: 4.},
+                        Keywords::DataPair{real: 2., imag: 1e-6},
+                        Keywords::DataPair{real: -3., imag: 0.},
+                        Keywords::End
+                    ]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn one_array_gives_correct_result() {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: None, format: None, real: vec![1.], imag: vec![2.]});
-                let keywords = record.get_data_keywords();
-                assert_eq!(keywords, Ok(vec![Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End]));
+                match record.get_data_keywords() {
+                    Ok(v) => assert_eq!(v, vec![Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2185,26 +2348,32 @@ mod test_record {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: None, format: None, real: vec![1.], imag: vec![2.]});
                 record.data.push(DataArray{name: None, format: None, real: vec![3.], imag: vec![4.]});
-                let keywords = record.get_data_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End,
-                    Keywords::Begin, Keywords::DataPair{real: 3., imag: 4.}, Keywords::End
-                ]));
+                match record.get_data_keywords() {
+                    Ok(v) => assert_eq!(v, vec![
+                            Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End,
+                            Keywords::Begin, Keywords::DataPair{real: 3., imag: 4.}, Keywords::End
+                        ]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn no_arrays_gives_empty() {
                 let record = Record::default();
-                let keywords = record.get_data_keywords();
-                assert_eq!(keywords, Ok(vec![]));
+                match record.get_data_keywords() {
+                    Ok(v) => assert_eq!(v, vec![]),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn bad_real_imag_gives_error() {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: None, format: None, real: vec![1., 2.], imag: vec![1.]});
-                let keywords = record.get_data_keywords();
-                assert_eq!(keywords, Err(WriteError::RealImagDoNotMatch(2, 1, 0)));
+                match record.get_data_keywords() {
+                    Err(WriteError::RealImagDoNotMatch(2, 1, 0)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2212,8 +2381,10 @@ mod test_record {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: None, format: None, real: vec![1., 2.], imag: vec![1., 2.]});
                 record.data.push(DataArray{name: None, format: None, real: vec![1., 2., 3.], imag: vec![1., 2.]});
-                let keywords = record.get_data_keywords();
-                assert_eq!(keywords, Err(WriteError::RealImagDoNotMatch(3, 2, 1)));
+                match record.get_data_keywords() {
+                    Err(WriteError::RealImagDoNotMatch(3, 2, 1)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2224,10 +2395,10 @@ mod test_record {
             fn one_entry() {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: Some(String::from("Name")), format: Some(String::from("Format")), real: vec![], imag: vec![]});
-                let keywords = record.get_data_defines_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Data{name: String::from("Name"), format: String::from("Format")}
-                ]));
+                match record.get_data_defines_keywords() {
+                    Ok(v) => assert_eq!(v, vec![Keywords::Data{name: String::from("Name"), format: String::from("Format")}]),
+                    _ => panic!("One entry fails"),
+                }
             }
 
             #[test]
@@ -2235,35 +2406,45 @@ mod test_record {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: Some(String::from("Name A")), format: Some(String::from("Format A")), real: vec![], imag: vec![]});
                 record.data.push(DataArray{name: Some(String::from("Name B")), format: Some(String::from("Format B")), real: vec![], imag: vec![]});
-                let keywords = record.get_data_defines_keywords();
-                assert_eq!(keywords, Ok(vec![
-                    Keywords::Data{name: String::from("Name A"), format: String::from("Format A")},
-                    Keywords::Data{name: String::from("Name B"), format: String::from("Format B")}
-                ]));
+                match record.get_data_defines_keywords() {
+                    Ok(v) => {
+                        assert_eq!(v, vec![
+                            Keywords::Data{name: String::from("Name A"), format: String::from("Format A")},
+                            Keywords::Data{name: String::from("Name B"), format: String::from("Format B")}
+                        ]);
+                    },
+                    _ => panic!("Multiple entries fails"),
+                }
             }
 
             #[test]
             fn no_name() {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: None, format: Some(String::from("")), real: vec![], imag: vec![]});
-                let keywords = record.get_data_defines_keywords();
-                assert_eq!(keywords, Err(WriteError::NoDataName(0)));
+                match record.get_data_defines_keywords() {
+                    Err(WriteError::NoDataName(0)) => (),
+                    _ => panic!("No name gives incorrect error"),
+                }
             }
 
             #[test]
             fn no_format() {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: Some(String::from("")), format: None, real: vec![], imag: vec![]});
-                let keywords = record.get_data_defines_keywords();
-                assert_eq!(keywords, Err(WriteError::NoDataFormat(0)));
+                match record.get_data_defines_keywords() {
+                    Err(WriteError::NoDataFormat(0)) => (),
+                    _ => panic!("No format gives incorrect error"),
+                }
             }
 
             #[test]
             fn no_name_no_format() {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: None, format: None, real: vec![], imag: vec![]});
-                let keywords = record.get_data_defines_keywords();
-                assert_eq!(keywords, Err(WriteError::NoDataName(0)));
+                match record.get_data_defines_keywords() {
+                    Err(WriteError::NoDataName(0)) => (),
+                    _ => panic!("No name no format does not give correct error"),
+                }
             }
         }
     }
@@ -2275,18 +2456,27 @@ mod test_record {
 
         #[test]
         fn cannot_read_empty_record() {
-            let expected = Err(Error::ValidRecordError(ValidRecordError::NoName));
-            let contents = "";
-            let result = Record::read_str(contents);
-            assert_eq!(expected, result);
+            match Record::read_from_source(&mut "".as_bytes()) {
+                Err(Error::ValidRecordError(ValidRecordError::NoName)) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn succeed_on_multiple_new_lines() {
             let contents = "CITIFILE A.01.00\nNAME MEMORY\n\n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-            match Record::read_str(contents) {
+            match Record::read_from_source(&mut contents.as_bytes()) {
                 Ok(_) => (),
-                Err(_) => panic!("Cannot parse when there are multiple blank lines"),
+                e => panic!("{:?}", e),
+            }
+        }
+
+        #[test]
+        fn succeed_on_whitespace_new_lines() {
+            let contents = "CITIFILE A.01.00\nNAME MEMORY\n      \n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
+            match Record::read_from_source(&mut contents.as_bytes()) {
+                Ok(_) => (),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -2296,14 +2486,14 @@ mod test_record {
 
             fn setup() -> Result<Record> {
                 let contents = "CITIFILE A.01.00\nNAME MEMORY\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-                Record::read_str(contents)
+                Record::read_from_source(&mut contents.as_bytes())
             }
 
             #[test]
             fn name() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.name, Some(String::from("MEMORY"))),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2311,7 +2501,7 @@ mod test_record {
             fn version() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.version, Some(String::from("A.01.00"))),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2319,7 +2509,7 @@ mod test_record {
             fn comments() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.comments.len(), 0),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2327,7 +2517,7 @@ mod test_record {
             fn constants() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.constants.len(), 0),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2335,7 +2525,7 @@ mod test_record {
             fn devices() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.devices.len(), 0),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2347,7 +2537,7 @@ mod test_record {
                         assert_eq!(record.header.independent_variable.format, Some(String::from("MAG")));
                         assert_eq!(record.header.independent_variable.data.len(), 0);
                     },
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2367,7 +2557,7 @@ mod test_record {
                         assert_relative_eq!(record.data[0].imag[1], -0.00139883);
                         assert_relative_eq!(record.data[0].imag[2], -0.00140022);
                     },
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
         }
@@ -2389,42 +2579,60 @@ mod test_record {
         #[test]
         fn test_valid_record() {
             let record = create_valid_record();
-            assert_eq!(Ok(create_valid_record()), record.validate_record());
+            match record.validate_record() {
+                Ok(r) => assert_eq!(r, create_valid_record()),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn test_no_data() {
             let mut record = create_valid_record();
             record.data = vec![];
-            assert_eq!(Err(ValidRecordError::NoData), record.validate_record());
+            match record.validate_record() {
+                Err(ValidRecordError::NoData) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn test_no_version() {
             let mut record = create_valid_record();
             record.header.version = None;
-            assert_eq!(Err(ValidRecordError::NoVersion), record.validate_record());
+            match record.validate_record() {
+                Err(ValidRecordError::NoVersion) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn test_no_name() {
             let mut record = create_valid_record();
             record.header.name = None;
-            assert_eq!(Err(ValidRecordError::NoName), record.validate_record());
+            match record.validate_record() {
+                Err(ValidRecordError::NoName) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn test_no_var() {
             let mut record = create_valid_record();
             record.header.independent_variable.name = None;
-            assert_eq!(Err(ValidRecordError::NoIndependentVariable), record.validate_record());
+            match record.validate_record() {
+                Err(ValidRecordError::NoIndependentVariable) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
         fn test_var_and_data_different() {
             let mut record = create_valid_record();
             record.header.independent_variable.data = vec![1.];
-            assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 0, 0)), record.validate_record());
+            match record.validate_record() {
+                Err(ValidRecordError::VarAndDataDifferentLengths(1, 0, 0)) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[test]
@@ -2437,7 +2645,10 @@ mod test_record {
                 imag: vec![1., 2., 3., 4.],
             };
             record.header.independent_variable.data = vec![1., 2., 3.];
-            assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 4, 0)), record.validate_record());
+            match record.validate_record() {
+                Err(ValidRecordError::RealImagDoNotMatch(3, 4, 0)) => (),
+                e => panic!("{:?}", e),
+            }
         }
 
         #[cfg(test)]
@@ -2447,7 +2658,10 @@ mod test_record {
             #[test]
             fn fail_on_no_version() {
                 let record = Record::blank();
-                assert_eq!(Err(ValidRecordError::NoData), record.has_data());
+                match record.has_data() {
+                    Err(ValidRecordError::NoData) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2456,7 +2670,10 @@ mod test_record {
                 expected.data.push(DataArray::new("E", "RI"));
                 let mut record = Record::blank();
                 record.data.push(DataArray::new("E", "RI"));
-                assert_eq!(Ok(expected), record.has_data());
+                match record.has_data() {
+                    Ok(r) => assert_eq!(r, expected),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2467,7 +2684,10 @@ mod test_record {
             #[test]
             fn fail_on_no_version() {
                 let record = Record::blank();
-                assert_eq!(Err(ValidRecordError::NoIndependentVariable), record.has_var());
+                match record.has_var() {
+                    Err(ValidRecordError::NoIndependentVariable) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2476,7 +2696,10 @@ mod test_record {
                 expected.header.independent_variable.name = Some(String::from("FREQ"));
                 let mut record = Record::blank();
                 record.header.independent_variable.name = Some(String::from("FREQ"));
-                assert_eq!(Ok(expected), record.has_var());
+                match record.has_var() {
+                    Ok(r) => assert_eq!(r, expected),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2487,7 +2710,10 @@ mod test_record {
             #[test]
             fn fail_on_no_version() {
                 let record = Record::blank();
-                assert_eq!(Err(ValidRecordError::NoVersion), record.has_version());
+                match record.has_version() {
+                    Err(ValidRecordError::NoVersion) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2496,7 +2722,10 @@ mod test_record {
                 expected.header.version = Some(String::from("A.01.00"));
                 let mut record = Record::blank();
                 record.header.version = Some(String::from("A.01.00"));
-                assert_eq!(Ok(expected), record.has_version());
+                match record.has_version() {
+                    Ok(r) => assert_eq!(r, expected),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2507,7 +2736,10 @@ mod test_record {
             #[test]
             fn fail_on_no_name() {
                 let record = Record::blank();
-                assert_eq!(Err(ValidRecordError::NoName), record.has_name());
+                match record.has_name() {
+                    Err(ValidRecordError::NoName) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2516,7 +2748,10 @@ mod test_record {
                 expected.header.name = Some(String::from("CAL_SET"));
                 let mut record = Record::blank();
                 record.header.name = Some(String::from("CAL_SET"));
-                assert_eq!(Ok(expected), record.has_name());
+                match record.has_name() {
+                    Ok(r) => assert_eq!(r, expected),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2527,7 +2762,10 @@ mod test_record {
             #[test]
             fn pass_on_blank() {
                 let record = Record::blank();
-                assert_eq!(Ok(Record::blank()), record.var_and_data_same_length());
+                match record.var_and_data_same_length() {
+                    Ok(r) => assert_eq!(r, Record::blank()),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2540,7 +2778,10 @@ mod test_record {
                     imag: vec![1.],
                 });
                 record.header.independent_variable.data = vec![1.];
-                assert_eq!(Ok(record.clone()), record.var_and_data_same_length());
+                match record.clone().var_and_data_same_length() {
+                    Ok(r) => assert_eq!(r, record),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2552,7 +2793,10 @@ mod test_record {
                     real: vec![1., 2.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Ok(record.clone()), record.var_and_data_same_length());
+                match record.clone().var_and_data_same_length() {
+                    Ok(r) => assert_eq!(r, record),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2565,7 +2809,10 @@ mod test_record {
                     imag: vec![1., 2.],
                 });
                 record.header.independent_variable.data = vec![1.];
-                assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 0)), record.var_and_data_same_length());
+                match record.var_and_data_same_length() {
+                    Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 0)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2584,7 +2831,10 @@ mod test_record {
                     imag: vec![1., 2.],
                 });
                 record.header.independent_variable.data = vec![1.];
-                assert_eq!(Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 1)), record.var_and_data_same_length());
+                match record.var_and_data_same_length() {
+                    Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 1)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
         }
 
@@ -2607,7 +2857,10 @@ mod test_record {
                     real: vec![1., 2., 3.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 2, 1)), record.data_real_image_same_length());
+                match record.data_real_image_same_length() {
+                    Err(ValidRecordError::RealImagDoNotMatch(3, 2, 1)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2619,13 +2872,19 @@ mod test_record {
                     real: vec![1., 2., 3.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Err(ValidRecordError::RealImagDoNotMatch(3, 2, 0)), record.data_real_image_same_length());
+                match record.data_real_image_same_length() {
+                    Err(ValidRecordError::RealImagDoNotMatch(3, 2, 0)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn pass_on_empty() {
                 let record = Record::blank();
-                assert_eq!(Ok(record.clone()), record.data_real_image_same_length());
+                match record.clone().data_real_image_same_length() {
+                    Ok(r) => assert_eq!(r, record),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2637,7 +2896,10 @@ mod test_record {
                     real: vec![1., 2.],
                     imag: vec![1., 2.],
                 });
-                assert_eq!(Ok(record.clone()), record.data_real_image_same_length());
+                match record.clone().data_real_image_same_length() {
+                    Ok(r) => assert_eq!(r, record),
+                    e => panic!("{:?}", e),
+                }
             }
         }
     }
@@ -2694,7 +2956,7 @@ mod test_record {
     }
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug)]
 pub enum ReaderError {
     #[error("More data arrays than defined in header")]
     DataArrayOverIndex,
@@ -2704,10 +2966,12 @@ pub enum ReaderError {
     SingleUseKeywordDefinedTwice(Keywords),
     #[error("Keyword `{0}` is out of order in the record")]
     OutOfOrderKeyword(Keywords),
-    #[error("Cannot open record `{0}`")]
-    CannotOpen(PathBuf),
+    #[error("Cannot open record `{0}`: {1}")]
+    CannotOpen(PathBuf, std::io::Error),
     #[error("Error on line {0}: {1}")]
     LineError(usize, ParseError),
+    #[error("Reading error occured: {0}")]
+    ReadingError(std::io::Error),
 }
 type ReaderResult<T> = std::result::Result<T, ReaderError>;
 
@@ -2744,8 +3008,14 @@ mod test_reader_error {
 
         #[test]
         fn cannot_open() {
-            let error = ReaderError::CannotOpen(Path::new("/temp").to_path_buf());
-            assert_eq!(format!("{}", error), "Cannot open record `/temp`");
+            let error = ReaderError::CannotOpen(Path::new("/temp").to_path_buf(), std::io::ErrorKind::NotFound.into());
+            assert_eq!(format!("{}", error), "Cannot open record `/temp`: entity not found");
+        }
+
+        #[test]
+        fn reading_error() {
+            let error = ReaderError::ReadingError(std::io::ErrorKind::NotFound.into());
+            assert_eq!(format!("{}", error), "Reading error occured: entity not found");
         }
 
         #[test]
@@ -2921,6 +3191,7 @@ impl RecordReaderState {
 #[cfg(test)]
 mod test_record_reader_state {
     use super::*;
+    use approx::*;
 
     #[test]
     fn test_new() {
@@ -2966,7 +3237,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.version, Some(String::from("A.01.01")));
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -2975,7 +3246,10 @@ mod test_record_reader_state {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let mut state = initialize_state();
                 state.record.header.version = Some(String::from("A.01.01"));
-                assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -2987,7 +3261,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.name, Some(String::from("Name")));
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -2996,7 +3270,10 @@ mod test_record_reader_state {
                 let keyword = Keywords::Name(String::from("CAL_SET"));
                 let mut state = initialize_state();
                 state.record.header.name = Some(String::from("CAL_SET"));
-                assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(String::from("CAL_SET")))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(name))) => assert_eq!(name, "CAL_SET"),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3009,7 +3286,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.independent_variable.format, None);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3023,7 +3300,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.independent_variable.format, Some(String::from("MAG")));
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3032,7 +3309,14 @@ mod test_record_reader_state {
                 let keyword = Keywords::Var{name: String::from("FREQ"), format: None, length: 102};
                 let mut state = initialize_state();
                 state.record.header.independent_variable.name = Some(String::from("Name"));
-                assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name: String::from("FREQ"), format: None, length: 102})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})) => {
+                        assert_eq!(name, "FREQ");
+                        assert_eq!(format, None);
+                        assert_eq!(length, 102);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3040,7 +3324,14 @@ mod test_record_reader_state {
                 let keyword = Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102};
                 let mut state = initialize_state();
                 state.record.header.independent_variable.name = Some(String::from("Name"));
-                assert_eq!(Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})) => {
+                        assert_eq!(name, "FREQ");
+                        assert_eq!(format, Some(String::from("MAG")));
+                        assert_eq!(length, 102);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3052,7 +3343,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.constants, vec![Constant::new("Name", "Value")]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3066,7 +3357,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.constants, vec![Constant::new("Name", "Value"), Constant::new("New Name", "New Value")]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3080,7 +3371,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.devices[0], Device{name: String::from("NA"), entries: vec![String::from("Value")]});
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3096,7 +3387,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.devices[1], Device{name: String::from("WVI"), entries: vec![String::from("1904")]});
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3106,7 +3397,7 @@ mod test_record_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => assert_eq!(s.state, RecordReaderStates::SeqList),
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3115,21 +3406,34 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegListBegin;
                 let mut state = initialize_state();
                 state.independent_variable_already_read = true;
-                assert_eq!(Err(ReaderError::IndependentVariableDefinedTwice), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::IndependentVariableDefinedTwice) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn seg_item() {
                 let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
+                        assert_relative_eq!(first, 10.);
+                        assert_relative_eq!(last, 100.);
+                        assert_eq!(number, 2);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn seg_list_end() {
                 let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3138,7 +3442,7 @@ mod test_record_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => assert_eq!(s.state, RecordReaderStates::VarList),
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
             
@@ -3147,14 +3451,20 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListBegin;
                 let mut state = initialize_state();
                 state.independent_variable_already_read = true;
-                assert_eq!(Err(ReaderError::IndependentVariableDefinedTwice), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::IndependentVariableDefinedTwice) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_list_item() {
                 let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(1.))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3166,7 +3476,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.data, vec![DataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3183,7 +3493,7 @@ mod test_record_reader_state {
                         ]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3191,7 +3501,13 @@ mod test_record_reader_state {
             fn data_pair() {
                 let keyword = Keywords::DataPair{real: 1., imag: 2.};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real: 1., imag: 2.})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
+                        assert_relative_eq!(real, 1.);
+                        assert_relative_eq!(imag, 2.);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3203,7 +3519,7 @@ mod test_record_reader_state {
                         assert_eq!(s.data_array_counter, 0);
                         assert_eq!(s.state, RecordReaderStates::Data);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3211,7 +3527,10 @@ mod test_record_reader_state {
             fn end() {
                 let keyword = Keywords::End;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::End)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::End)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3223,7 +3542,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.comments, vec![String::from("Comment")]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3237,7 +3556,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.comments, vec![String::from("Comment First"), String::from("Comment")]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
         }   
@@ -3262,98 +3581,161 @@ mod test_record_reader_state {
             fn citirecord() {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn name() {
                 let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Name(String::from("Name")))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_none() {
                 let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(format, None);
+                        assert_eq!(length, 102);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_some() {
                 let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(format, Some(String::from("MAG")));
+                        assert_eq!(length, 102);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn constant() {
                 let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(value, "Value");
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn device() {
                 let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(value, "Value");
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn seg_list_begin() {
                 let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn seg_item() {
                 let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
+                        assert_relative_eq!(first, 10.);
+                        assert_relative_eq!(last, 100.);
+                        assert_eq!(number, 2);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn seg_list_end() {
                 let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_list_begin() {
                 let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)), state.process_keyword(keyword));
+                match  state.process_keyword(keyword){ 
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
             
             #[test]
             fn var_list_item() {
                 let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(1.))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_list_item_exponent() {
                 let keyword = Keywords::VarListItem(1e9);
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(1e9))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1e9),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_list_end() {
                 let keyword = Keywords::VarListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListEnd)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListEnd)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn data() {
                 let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(format, "Format");
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3366,7 +3748,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.data[0].imag, vec![2.]);
                         assert_eq!(s.state, RecordReaderStates::Data);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3384,7 +3766,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.data[1].imag, vec![2.]);
                         assert_eq!(s.state, RecordReaderStates::Data);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3393,14 +3775,20 @@ mod test_record_reader_state {
                 let keyword = Keywords::DataPair{real: 1., imag: 2.};
                 let mut state = initialize_state();
                 state.data_array_counter = 1;
-                assert_eq!(Err(ReaderError::DataArrayOverIndex), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::DataArrayOverIndex) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn begin() {
                 let keyword = Keywords::Begin;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3412,7 +3800,7 @@ mod test_record_reader_state {
                         assert_eq!(s.state, RecordReaderStates::Header);
                         assert_eq!(s.data_array_counter, 1);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3426,7 +3814,7 @@ mod test_record_reader_state {
                         assert_eq!(s.state, RecordReaderStates::Header);
                         assert_eq!(s.data_array_counter, 2);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3434,7 +3822,10 @@ mod test_record_reader_state {
             fn comment() {
                 let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(comment))) => assert_eq!(comment, "Comment"),
+                    e => panic!("{:?}", e),
+                }
             }
         }   
     }
@@ -3456,70 +3847,118 @@ mod test_record_reader_state {
             fn citirecord() {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn name() {
                 let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Name(String::from("Name")))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_none() {
                 let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(format, None);
+                        assert_eq!(length, 102);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_some() {
                 let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(format, Some(String::from("MAG")));
+                        assert_eq!(length, 102);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn constant() {
                 let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(value, "Value");
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn device() {
                 let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(value, "Value");
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn seg_list_begin() {
                 let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn seg_item() {
                 let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first: 10., last: 100., number: 2})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
+                        assert_relative_eq!(first, 10.);
+                        assert_relative_eq!(last, 100.);
+                        assert_eq!(number, 2);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn seg_list_end() {
                 let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_list_begin() {
                 let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
             
             #[test]
@@ -3531,7 +3970,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.independent_variable.data, vec![1.]);
                         assert_eq!(s.state, RecordReaderStates::VarList);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3544,7 +3983,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.independent_variable.data, vec![1e9]);
                         assert_eq!(s.state, RecordReaderStates::VarList);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3558,7 +3997,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.independent_variable.data, vec![1e8, 1e9]);
                         assert_eq!(s.state, RecordReaderStates::VarList);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3571,7 +4010,7 @@ mod test_record_reader_state {
                         assert_eq!(s.independent_variable_already_read, true);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3579,35 +4018,56 @@ mod test_record_reader_state {
             fn data() {
                 let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(format, "Format");
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn data_pair() {
                 let keyword = Keywords::DataPair{real: 1., imag: 1.};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real: 1., imag: 1.})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
+                        assert_relative_eq!(real, 1.);
+                        assert_relative_eq!(imag, 1.);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn begin() {
                 let keyword = Keywords::Begin;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn end() {
                 let keyword = Keywords::End;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::End)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::End)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn comment() {
                 let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(comment))) => assert_eq!(comment, "Comment"),
+                    e => panic!("{:?}", e),
+                }
             }
         }   
     }
@@ -3629,49 +4089,84 @@ mod test_record_reader_state {
             fn citirecord() {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version: String::from("A.01.01")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn name() {
                 let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Name(String::from("Name")))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_none() {
                 let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: None, length: 102})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(format, None);
+                        assert_eq!(length, 102);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_some() {
                 let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(format, Some(String::from("MAG")));
+                        assert_eq!(length, 102);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn constant() {
                 let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(value, "Value");
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn device() {
                 let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name: String::from("Name"), value: String::from("Value")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(value, "Value");
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn seg_list_begin() {
                 let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
@@ -3683,7 +4178,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.independent_variable.data, vec![10., 100.]);
                         assert_eq!(s.state, RecordReaderStates::SeqList);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3696,7 +4191,7 @@ mod test_record_reader_state {
                         assert_eq!(s.record.header.independent_variable.data, vec![10., 55., 100.]);
                         assert_eq!(s.state, RecordReaderStates::SeqList);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3709,7 +4204,7 @@ mod test_record_reader_state {
                         assert_eq!(s.independent_variable_already_read, true);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
-                    Err(_) => panic!(),
+                    Err(e) => panic!("{:?}", e),
                 }
             }
 
@@ -3717,56 +4212,86 @@ mod test_record_reader_state {
             fn var_list_begin() {
                 let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
             
             #[test]
             fn var_list_item() {
                 let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(1.))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.0),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn var_list_end() {
                 let keyword = Keywords::VarListEnd;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::VarListEnd)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListEnd)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn data() {
                 let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name: String::from("Name"), format: String::from("Format")})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
+                        assert_eq!(name, "Name");
+                        assert_eq!(format, "Format");
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn data_pair() {
                 let keyword = Keywords::DataPair{real: 1., imag: 1.};
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real: 1., imag: 1.})), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
+                        assert_relative_eq!(real, 1.);
+                        assert_relative_eq!(imag, 1.);
+                    },
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn begin() {
                 let keyword = Keywords::Begin;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn end() {
                 let keyword = Keywords::End;
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::End)), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::End)) => (),
+                    e => panic!("{:?}", e),
+                }
             }
 
             #[test]
             fn comment() {
                 let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
-                assert_eq!(Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(String::from("Comment")))), state.process_keyword(keyword));
+                match state.process_keyword(keyword) {
+                    Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(s))) => assert_eq!(s, "Comment"),
+                    e => panic!("{:?}", e),
+                }
             }
         }   
     }

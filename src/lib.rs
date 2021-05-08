@@ -1755,7 +1755,7 @@ impl Record {
         let mut state = RecordReaderState::new();
         for (i, line) in contents.lines().enumerate() {
             // Filter out new lines
-            if line.len() > 0 {
+            if line.trim().len() > 0 {
                 let keyword = Keywords::try_from(line).map_err(|e| ReaderError::LineError(i, e))?;
                 state = state.process_keyword(keyword)?;
             }
@@ -2456,6 +2456,15 @@ mod test_record {
         #[test]
         fn succeed_on_multiple_new_lines() {
             let contents = "CITIFILE A.01.00\nNAME MEMORY\n\n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
+            match Record::read_str(contents) {
+                Ok(_) => (),
+                Err(_) => panic!("Cannot parse when there are multiple blank lines"),
+            }
+        }
+
+        #[test]
+        fn succeed_on_whitespace_new_lines() {
+            let contents = "CITIFILE A.01.00\nNAME MEMORY\n      \n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
             match Record::read_str(contents) {
                 Ok(_) => (),
                 Err(_) => panic!("Cannot parse when there are multiple blank lines"),

@@ -1,5 +1,3 @@
-#![feature(test)]
-
 use criterion::criterion_main;
 
 pub mod write;

@@ -2467,7 +2467,7 @@ mod test_record {
             let contents = "CITIFILE A.01.00\nNAME MEMORY\n\n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
             match Record::read_from_source(&mut contents.as_bytes()) {
                 Ok(_) => (),
-                Err(_) => panic!("Cannot parse when there are multiple blank lines"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -2476,7 +2476,7 @@ mod test_record {
             let contents = "CITIFILE A.01.00\nNAME MEMORY\n      \n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
             match Record::read_from_source(&mut contents.as_bytes()) {
                 Ok(_) => (),
-                Err(_) => panic!("Cannot parse when there are multiple blank lines"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -2493,7 +2493,7 @@ mod test_record {
             fn name() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.name, Some(String::from("MEMORY"))),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2501,7 +2501,7 @@ mod test_record {
             fn version() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.version, Some(String::from("A.01.00"))),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2509,7 +2509,7 @@ mod test_record {
             fn comments() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.comments.len(), 0),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2517,7 +2517,7 @@ mod test_record {
             fn constants() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.constants.len(), 0),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2525,7 +2525,7 @@ mod test_record {
             fn devices() {
                 match setup() {
                     Ok(record) => assert_eq!(record.header.devices.len(), 0),
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2537,7 +2537,7 @@ mod test_record {
                         assert_eq!(record.header.independent_variable.format, Some(String::from("MAG")));
                         assert_eq!(record.header.independent_variable.data.len(), 0);
                     },
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
 
@@ -2557,7 +2557,7 @@ mod test_record {
                         assert_relative_eq!(record.data[0].imag[1], -0.00139883);
                         assert_relative_eq!(record.data[0].imag[2], -0.00140022);
                     },
-                    Err(_) => panic!("File could not be read"),
+                    e => panic!("{:?}", e),
                 }
             }
         }

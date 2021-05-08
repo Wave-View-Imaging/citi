@@ -54,7 +54,7 @@ mod cti_read_regression_tests {
     fn data_directory() -> PathBuf {
         let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_buf.push("tests");
-        path_buf.push("cti_regression_files");
+        path_buf.push("regression_files");
         path_buf
     }
 
@@ -76,7 +76,7 @@ mod cti_read_regression_tests {
         fn name() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.name, Some(String::from("MEMORY"))),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -84,7 +84,7 @@ mod cti_read_regression_tests {
         fn version() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.00"))),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -92,7 +92,7 @@ mod cti_read_regression_tests {
         fn comments() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.comments.len(), 0),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -100,7 +100,7 @@ mod cti_read_regression_tests {
         fn constants() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.constants.len(), 0),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -114,7 +114,7 @@ mod cti_read_regression_tests {
                     assert_eq!(file.header.devices[0].entries[0], String::from("VERSION HP8510B.05.00"));
                     assert_eq!(file.header.devices[0].entries[1], String::from("REGISTER 1"));
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -128,7 +128,7 @@ mod cti_read_regression_tests {
                     let expected: Vec<f64> = vec![];
                     assert_array_relative_eq!(file.header.independent_variable.data, expected);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -146,7 +146,7 @@ mod cti_read_regression_tests {
                     assert_array_relative_eq!(real, file.data[0].real);
                     assert_array_relative_eq!(imag, file.data[0].imag);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
     }
@@ -169,7 +169,7 @@ mod cti_read_regression_tests {
         fn name() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.name, Some(String::from("DATA"))),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -177,7 +177,7 @@ mod cti_read_regression_tests {
         fn version() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.00"))),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -185,7 +185,7 @@ mod cti_read_regression_tests {
         fn comments() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.comments.len(), 0),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -193,7 +193,7 @@ mod cti_read_regression_tests {
         fn constants() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.constants.len(), 0),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -207,7 +207,7 @@ mod cti_read_regression_tests {
                     assert_eq!(file.header.devices[0].entries[0], String::from("VERSION HP8510B.05.00"));
                     assert_eq!(file.header.devices[0].entries[1], String::from("REGISTER 1"));
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -233,7 +233,7 @@ mod cti_read_regression_tests {
                 
                     assert_array_relative_eq!(expected, file.header.independent_variable.data);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -257,7 +257,7 @@ mod cti_read_regression_tests {
                     assert_array_relative_eq!(real, file.data[0].real);
                     assert_array_relative_eq!(imag, file.data[0].imag);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
     }
@@ -288,7 +288,7 @@ mod cti_read_regression_tests {
         fn version() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.01"))),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -307,7 +307,7 @@ mod cti_read_regression_tests {
                 Ok(file) => {
                     assert_eq!(file.header.comments, expected);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -315,7 +315,7 @@ mod cti_read_regression_tests {
         fn constants() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.constants.len(), 0),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -325,7 +325,7 @@ mod cti_read_regression_tests {
                 Ok(file) => {
                     assert_eq!(file.header.devices.len(), 0);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -343,7 +343,7 @@ mod cti_read_regression_tests {
                 
                     assert_array_relative_eq!(expected, file.header.independent_variable.data);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -360,7 +360,7 @@ mod cti_read_regression_tests {
                     assert_array_relative_eq!(real, file.data[0].real);
                     assert_array_relative_eq!(imag, file.data[0].imag);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
     }
@@ -383,7 +383,7 @@ mod cti_read_regression_tests {
         fn name() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.name, Some(String::from("CAL_SET"))),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -391,7 +391,7 @@ mod cti_read_regression_tests {
         fn version() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.00"))),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -399,7 +399,7 @@ mod cti_read_regression_tests {
         fn comments() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.comments.len(), 0),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -407,7 +407,7 @@ mod cti_read_regression_tests {
         fn constants() {
             match setup() {
                 Ok(file) => assert_eq!(file.header.constants.len(), 0),
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -442,7 +442,7 @@ mod cti_read_regression_tests {
 
                     assert_eq!(file.header.devices, devices);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -462,7 +462,7 @@ mod cti_read_regression_tests {
                 
                     assert_array_relative_eq!(expected, file.header.independent_variable.data);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -495,7 +495,7 @@ mod cti_read_regression_tests {
                     assert_array_relative_eq!(real2, file.data[2].real);
                     assert_array_relative_eq!(imag2, file.data[2].imag);
                 },
-                Err(_) => panic!("File could not be read"),
+                e => panic!("{:?}", e),
             }
         }
     }
@@ -517,7 +517,7 @@ mod test_assert_files_equal {
     fn data_directory() -> PathBuf {
         let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_buf.push("tests");
-        path_buf.push("cti_regression_files");
+        path_buf.push("regression_files");
         path_buf
     }
 
@@ -559,7 +559,7 @@ mod cti_write_regression_tests {
     fn data_directory() -> PathBuf {
         let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path_buf.push("tests");
-        path_buf.push("cti_regression_files");
+        path_buf.push("regression_files");
         path_buf
     }
 

@@ -1667,10 +1667,10 @@ pub enum WriteError {
     NoVarName,
     #[error("Data array {2} has different length real and imaginary components ({0} != {1})")]
     RealImagDoNotMatch(usize, usize, usize),
-    // #[error("Cannot write record: {0}")]
-    // CannotWrite(#[from] std::io::Error),
-    #[error("Cannot write record to `{0}`")]
-    CannotWrite(PathBuf),
+    #[error("Cannot write record to `{0}`: {1}")]
+    CannotWrite(PathBuf, std::io::Error),
+    #[error("Writing error occured: {0}")]
+    WrittingError(std::io::Error),
 }
 type WriteResult<T> = std::result::Result<T, WriteError>;
 
@@ -1732,8 +1732,14 @@ mod test_write_result {
 
         #[test]
         fn cannot_write() {
-            let error = WriteError::CannotWrite(Path::new("/temp").to_path_buf());
-            assert_eq!(format!("{}", error), "Cannot write record to `/temp`");
+            let error = WriteError::CannotWrite(Path::new("/temp").to_path_buf(), std::io::ErrorKind::NotFound.into());
+            assert_eq!(format!("{}", error), "Cannot write record to `/temp`: entity not found");
+        }
+
+        #[test]
+        fn writting_error() {
+            let error = WriteError::WrittingError(std::io::ErrorKind::NotFound.into());
+            assert_eq!(format!("{}", error), "Writing error occured: entity not found");
         }
     }
 }
@@ -1764,20 +1770,19 @@ impl Record {
     }
 
     pub fn write<P: AsRef<Path>>(&self, path: &P)  -> Result<()> {
-        let mut buffer = std::io::BufWriter::new(std::fs::File::create(path).map_err(|_| WriteError::CannotWrite(path.as_ref().to_path_buf()))?);
+        let mut buffer = std::io::BufWriter::new(std::fs::File::create(path).map_err(|e| WriteError::CannotWrite(path.as_ref().to_path_buf(), e))?);
+        self.write_to_sink(&mut buffer)
+    }
+
+    pub fn write_to_sink<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
         let keywords = self.get_keywords()?;
         
         for keyword in keywords.iter() {
-            writeln!(&mut buffer, "{}", keyword).map_err(|_| WriteError::CannotWrite(path.as_ref().to_path_buf()))?;
+            writeln!(writer, "{}", keyword).map_err(|e| WriteError::WrittingError(e))?;
         }
 
         Ok(())
     }
-
-    // pub fn write_to_sink<W: std::io::Write>(self, writer: &mut W) -> Result<()> {
-    //     write!(writer, "{}", self).unwrap();
-    //     Ok(())
-    // }
 
     fn get_data_keywords(&self) -> WriteResult<Vec<Keywords>> {
         let mut keywords: Vec<Keywords> = vec![];
@@ -1972,7 +1977,7 @@ mod test_record {
     fn write_gives_error_on_bad_file() {
         let record = Record::default();
         match record.write(&Path::new("")) {
-            Err(Error::WriteError(WriteError::CannotWrite(path))) => assert_eq!(path, Path::new("").to_path_buf()),
+            Err(Error::WriteError(WriteError::CannotWrite(path, std::io::Error{..}))) => assert_eq!(path, Path::new("").to_path_buf()),
             e => panic!("{:?}", e),
         }
     }

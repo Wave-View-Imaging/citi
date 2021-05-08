@@ -28,3 +28,8 @@ cargo clippy
 ```bash
 cargo deny check
 ```
+
+### Run benchmarks
+```bash
+cargo bench
+```

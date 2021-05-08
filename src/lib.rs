@@ -41,7 +41,8 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::fmt;
 use std::path::{Path,PathBuf};
-use std::io::Write;
+use std::io::{BufReader, BufRead};
+use std::fs::File;
 
 use thiserror::Error;
 
@@ -1753,16 +1754,19 @@ impl Record {
     }
 
     pub fn read<P: AsRef<Path>>(path: &P)  -> Result<Record> {
-        let contents = std::fs::read_to_string(path).map_err(|_| ReaderError::CannotOpen(path.as_ref().to_path_buf()))?;
-        Record::read_str(&contents)
+        let mut file = File::open(path).map_err(|e| ReaderError::CannotOpen(path.as_ref().to_path_buf(), e))?;
+        Record::read_from_source(&mut file)
     }
 
-    fn read_str(contents: &str) -> Result<Record> {
+    pub fn read_from_source<R: std::io::Read>(reader: &mut R) -> Result<Record> {
+        let buf_reader = BufReader::new(reader);
         let mut state = RecordReaderState::new();
-        for (i, line) in contents.lines().enumerate() {
+
+        for (i, line) in buf_reader.lines().enumerate() {
+            let this_line = line.map_err(|e| ReaderError::ReadingError(e))?;
             // Filter out new lines
-            if line.trim().len() > 0 {
-                let keyword = Keywords::try_from(line).map_err(|e| ReaderError::LineError(i, e))?;
+            if this_line.trim().len() > 0 {
+                let keyword = Keywords::from_str(&this_line).map_err(|e| ReaderError::LineError(i, e))?;
                 state = state.process_keyword(keyword)?;
             }
         }
@@ -1776,7 +1780,7 @@ impl Record {
 
     pub fn write_to_sink<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
         let keywords = self.get_keywords()?;
-        
+
         for keyword in keywords.iter() {
             writeln!(writer, "{}", keyword).map_err(|e| WriteError::WrittingError(e))?;
         }
@@ -2452,7 +2456,7 @@ mod test_record {
 
         #[test]
         fn cannot_read_empty_record() {
-            match Record::read_str("") {
+            match Record::read_from_source(&mut "".as_bytes()) {
                 Err(Error::ValidRecordError(ValidRecordError::NoName)) => (),
                 e => panic!("{:?}", e),
             }
@@ -2461,7 +2465,7 @@ mod test_record {
         #[test]
         fn succeed_on_multiple_new_lines() {
             let contents = "CITIFILE A.01.00\nNAME MEMORY\n\n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-            match Record::read_str(contents) {
+            match Record::read_from_source(&mut contents.as_bytes()) {
                 Ok(_) => (),
                 Err(_) => panic!("Cannot parse when there are multiple blank lines"),
             }
@@ -2470,7 +2474,7 @@ mod test_record {
         #[test]
         fn succeed_on_whitespace_new_lines() {
             let contents = "CITIFILE A.01.00\nNAME MEMORY\n      \n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-            match Record::read_str(contents) {
+            match Record::read_from_source(&mut contents.as_bytes()) {
                 Ok(_) => (),
                 Err(_) => panic!("Cannot parse when there are multiple blank lines"),
             }
@@ -2482,7 +2486,7 @@ mod test_record {
 
             fn setup() -> Result<Record> {
                 let contents = "CITIFILE A.01.00\nNAME MEMORY\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-                Record::read_str(contents)
+                Record::read_from_source(&mut contents.as_bytes())
             }
 
             #[test]
@@ -2962,10 +2966,12 @@ pub enum ReaderError {
     SingleUseKeywordDefinedTwice(Keywords),
     #[error("Keyword `{0}` is out of order in the record")]
     OutOfOrderKeyword(Keywords),
-    #[error("Cannot open record `{0}`")]
-    CannotOpen(PathBuf),
+    #[error("Cannot open record `{0}`: {1}")]
+    CannotOpen(PathBuf, std::io::Error),
     #[error("Error on line {0}: {1}")]
     LineError(usize, ParseError),
+    #[error("Reading error occured: {0}")]
+    ReadingError(std::io::Error),
 }
 type ReaderResult<T> = std::result::Result<T, ReaderError>;
 
@@ -3002,8 +3008,14 @@ mod test_reader_error {
 
         #[test]
         fn cannot_open() {
-            let error = ReaderError::CannotOpen(Path::new("/temp").to_path_buf());
-            assert_eq!(format!("{}", error), "Cannot open record `/temp`");
+            let error = ReaderError::CannotOpen(Path::new("/temp").to_path_buf(), std::io::ErrorKind::NotFound.into());
+            assert_eq!(format!("{}", error), "Cannot open record `/temp`: entity not found");
+        }
+
+        #[test]
+        fn reading_error() {
+            let error = ReaderError::ReadingError(std::io::ErrorKind::NotFound.into());
+            assert_eq!(format!("{}", error), "Reading error occured: entity not found");
         }
 
         #[test]

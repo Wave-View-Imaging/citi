@@ -20,7 +20,5 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
-      - name: Build
-        run: cargo build --verbose
       - name: Run bench
         run: cargo bench

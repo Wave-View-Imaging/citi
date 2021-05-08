@@ -1,51 +1,8 @@
-use citi::{Result, Record, Device, DataArray, Var};
+use citi::{
+    Result, Record, Device, DataArray, Var, assert_array_relative_eq, assert_complex_array_relative_eq
+};
 use std::path::PathBuf;
-
-macro_rules! assert_array_relative_eq {
-    ($lhs:expr, $rhs:expr) => {
-        // Size
-        assert_eq!($lhs.len(), $rhs.len());
-
-        // Values
-        let it = $lhs.iter().zip($rhs.iter());
-        for (l, r) in it {
-            approx::assert_relative_eq!(l, r);
-        }
-    };
-}
-
-#[cfg(test)]
-mod test_assert_array_relative_eq_macro {
-    #[test]
-    fn pass_on_empty() {
-        let expected: Vec<f64> = vec![];
-        let result: Vec<f64> = vec![];
-        assert_array_relative_eq!(expected, result);
-    }
-
-    #[test]
-    fn pass_on_same() {
-        let expected: Vec<f64> = vec![1., 2., 3.];
-        let result: Vec<f64> = vec![1., 2., 3.];
-        assert_array_relative_eq!(expected, result);
-    }
-
-    #[test]
-    #[should_panic]
-    fn fail_on_different() {
-        let expected: Vec<f64> = vec![1., 2., 3.];
-        let result: Vec<f64> = vec![1., 2., 0.];
-        assert_array_relative_eq!(expected, result);
-    }
-
-    #[test]
-    #[should_panic]
-    fn fail_on_different_size() {
-        let expected: Vec<f64> = vec![1., 2., 3.];
-        let result: Vec<f64> = vec![1., 2.];
-        assert_array_relative_eq!(expected, result);
-    }
-}
+use num_complex::Complex;
 
 #[cfg(test)]
 mod cti_read_regression_tests {
@@ -75,7 +32,7 @@ mod cti_read_regression_tests {
         #[test]
         fn name() {
             match setup() {
-                Ok(file) => assert_eq!(file.header.name, Some(String::from("MEMORY"))),
+                Ok(file) => assert_eq!(file.header.name, "MEMORY"),
                 e => panic!("{:?}", e),
             }
         }
@@ -83,7 +40,7 @@ mod cti_read_regression_tests {
         #[test]
         fn version() {
             match setup() {
-                Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.00"))),
+                Ok(file) => assert_eq!(file.header.version, "A.01.00"),
                 e => panic!("{:?}", e),
             }
         }
@@ -109,10 +66,10 @@ mod cti_read_regression_tests {
             match setup() {
                 Ok(file) => {
                     assert_eq!(file.header.devices.len(), 1);
-                    assert_eq!(file.header.devices[0].name, String::from("NA"));
+                    assert_eq!(file.header.devices[0].name, "NA");
                     assert_eq!(file.header.devices[0].entries.len(), 2);
-                    assert_eq!(file.header.devices[0].entries[0], String::from("VERSION HP8510B.05.00"));
-                    assert_eq!(file.header.devices[0].entries[1], String::from("REGISTER 1"));
+                    assert_eq!(file.header.devices[0].entries[0], "VERSION HP8510B.05.00");
+                    assert_eq!(file.header.devices[0].entries[1], "REGISTER 1");
                 },
                 e => panic!("{:?}", e),
             }
@@ -122,8 +79,8 @@ mod cti_read_regression_tests {
         fn independent_variable() {
             match setup() {
                 Ok(file) => {
-                    assert_eq!(file.header.independent_variable.name, Some(String::from("FREQ")));
-                    assert_eq!(file.header.independent_variable.format, Some(String::from("MAG")));
+                    assert_eq!(file.header.independent_variable.name, "FREQ");
+                    assert_eq!(file.header.independent_variable.format, "MAG");
 
                     let expected: Vec<f64> = vec![];
                     assert_array_relative_eq!(file.header.independent_variable.data, expected);
@@ -136,15 +93,18 @@ mod cti_read_regression_tests {
         fn data() {
             match setup() {
                 Ok(file) => {
-                    let real: Vec<f64> = vec![-1.31189E-3, -3.67867E-3, -3.43990E-3, -2.70664E-4, 0.65892E-4];
-                    let imag: Vec<f64> = vec![-1.47980E-3, -0.67782E-3, 0.58746E-3, -9.76175E-4, -9.61571E-4];
+                    let data = vec![
+                        Complex{re: -1.31189E-3, im: -1.47980E-3},
+                        Complex{re: -3.67867E-3, im: -0.67782E-3},
+                        Complex{re: -3.43990E-3, im:  0.58746E-3},
+                        Complex{re: -2.70664E-4, im: -9.76175E-4},
+                        Complex{re:  0.65892E-4, im: -9.61571E-4},
+                    ];
 
                     assert_eq!(file.data.len(), 1);
-                    assert_eq!(file.data[0].name, Some(String::from("S")));
-                    assert_eq!(file.data[0].format, Some(String::from("RI")));
-
-                    assert_array_relative_eq!(real, file.data[0].real);
-                    assert_array_relative_eq!(imag, file.data[0].imag);
+                    assert_eq!(file.data[0].name, "S");
+                    assert_eq!(file.data[0].format, "RI");
+                    assert_complex_array_relative_eq!(file.data[0].samples, data);
                 },
                 e => panic!("{:?}", e),
             }
@@ -168,7 +128,7 @@ mod cti_read_regression_tests {
         #[test]
         fn name() {
             match setup() {
-                Ok(file) => assert_eq!(file.header.name, Some(String::from("DATA"))),
+                Ok(file) => assert_eq!(file.header.name, "DATA"),
                 e => panic!("{:?}", e),
             }
         }
@@ -176,7 +136,7 @@ mod cti_read_regression_tests {
         #[test]
         fn version() {
             match setup() {
-                Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.00"))),
+                Ok(file) => assert_eq!(file.header.version, "A.01.00"),
                 e => panic!("{:?}", e),
             }
         }
@@ -228,8 +188,8 @@ mod cti_read_regression_tests {
                         4000000000.,
                     ];
 
-                    assert_eq!(file.header.independent_variable.name, Some(String::from("FREQ")));
-                    assert_eq!(file.header.independent_variable.format, Some(String::from("MAG")));
+                    assert_eq!(file.header.independent_variable.name, "FREQ");
+                    assert_eq!(file.header.independent_variable.format, "MAG");
                 
                     assert_array_relative_eq!(expected, file.header.independent_variable.data);
                 },
@@ -241,21 +201,23 @@ mod cti_read_regression_tests {
         fn data() {
             match setup() {
                 Ok(file) => {
-                    let real: Vec<f64> = vec![
-                        0.86303E-1, 8.97491E-1, -4.96887E-1, -5.65338E-1, 8.94287E-1,
-                        1.77551E-1, -9.35028E-1, 3.69079E-1, 7.80120E-1, -7.78350E-1
-                    ];
-                    let imag: Vec<f64> = vec![
-                        -8.98651E-1, 3.06915E-1, 7.87323E-1, -7.05291E-1, -4.25537E-1,
-                        8.96606E-1, -1.10504E-1, -9.13787E-1, 5.37841E-1, 5.72082E-1
+                    let data = vec![
+                        Complex{re:  0.86303E-1, im: -8.98651E-1},
+                        Complex{re:  8.97491E-1, im:  3.06915E-1},
+                        Complex{re: -4.96887E-1, im:  7.87323E-1},
+                        Complex{re: -5.65338E-1, im: -7.05291E-1},
+                        Complex{re:  8.94287E-1, im: -4.25537E-1},
+                        Complex{re:  1.77551E-1, im:  8.96606E-1},
+                        Complex{re: -9.35028E-1, im: -1.10504E-1},
+                        Complex{re:  3.69079E-1, im: -9.13787E-1},
+                        Complex{re:  7.80120E-1, im:  5.37841E-1},
+                        Complex{re: -7.78350E-1, im: 5.72082E-1},
                     ];
 
                     assert_eq!(file.data.len(), 1);
-                    assert_eq!(file.data[0].name, Some(String::from("S[1,1]")));
-                    assert_eq!(file.data[0].format, Some(String::from("RI")));
-
-                    assert_array_relative_eq!(real, file.data[0].real);
-                    assert_array_relative_eq!(imag, file.data[0].imag);
+                    assert_eq!(file.data[0].name, "S[1,1]");
+                    assert_eq!(file.data[0].format, "RI");
+                    assert_complex_array_relative_eq!(file.data[0].samples, data);
                 },
                 e => panic!("{:?}", e),
             }
@@ -279,7 +241,7 @@ mod cti_read_regression_tests {
         #[test]
         fn name() {
             match setup() {
-                Ok(file) => assert_eq!(file.header.name, Some(String::from("Antonly001"))),
+                Ok(file) => assert_eq!(file.header.name, "Antonly001"),
                 Err(e) => panic!("File could not be read: {}", e),
             }
         }
@@ -287,7 +249,7 @@ mod cti_read_regression_tests {
         #[test]
         fn version() {
             match setup() {
-                Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.01"))),
+                Ok(file) => assert_eq!(file.header.version, "A.01.01"),
                 e => panic!("{:?}", e),
             }
         }
@@ -338,8 +300,8 @@ mod cti_read_regression_tests {
                         200e6,
                     ];
 
-                    assert_eq!(file.header.independent_variable.name, Some(String::from("Freq")));
-                    assert_eq!(file.header.independent_variable.format, Some(String::from("MAG")));
+                    assert_eq!(file.header.independent_variable.name, "Freq");
+                    assert_eq!(file.header.independent_variable.format, "MAG");
                 
                     assert_array_relative_eq!(expected, file.header.independent_variable.data);
                 },
@@ -351,14 +313,15 @@ mod cti_read_regression_tests {
         fn data() {
             match setup() {
                 Ok(file) => {
-                    let real: Vec<f64> = vec![8.609423041343689E-1, -6.1961996555328369E-1];
-                    let imag: Vec<f64> = vec![4.5087423920631409E-1, -7.2456854581832886E-1];
+                    let data = vec![
+                        Complex{re: 8.609423041343689E-1, im: 4.5087423920631409E-1},
+                        Complex{re: -6.1961996555328369E-1, im: -7.2456854581832886E-1},
+                    ];
 
                     assert_eq!(file.data.len(), 1);
-                    assert_eq!(file.data[0].name, Some(String::from("S11")));
-                    assert_eq!(file.data[0].format, Some(String::from("RI")));
-                    assert_array_relative_eq!(real, file.data[0].real);
-                    assert_array_relative_eq!(imag, file.data[0].imag);
+                    assert_eq!(file.data[0].name, "S11");
+                    assert_eq!(file.data[0].format, "RI");
+                    assert_complex_array_relative_eq!(data, file.data[0].samples);
                 },
                 e => panic!("{:?}", e),
             }
@@ -382,7 +345,7 @@ mod cti_read_regression_tests {
         #[test]
         fn name() {
             match setup() {
-                Ok(file) => assert_eq!(file.header.name, Some(String::from("CAL_SET"))),
+                Ok(file) => assert_eq!(file.header.name, "CAL_SET"),
                 e => panic!("{:?}", e),
             }
         }
@@ -390,7 +353,7 @@ mod cti_read_regression_tests {
         #[test]
         fn version() {
             match setup() {
-                Ok(file) => assert_eq!(file.header.version, Some(String::from("A.01.00"))),
+                Ok(file) => assert_eq!(file.header.version, "A.01.00"),
                 e => panic!("{:?}", e),
             }
         }
@@ -457,9 +420,8 @@ mod cti_read_regression_tests {
                         3000000000.,
                     ];
 
-                    assert_eq!(file.header.independent_variable.name, Some(String::from("FREQ")));
-                    assert_eq!(file.header.independent_variable.format, Some(String::from("MAG")));
-                
+                    assert_eq!(file.header.independent_variable.name, "FREQ");
+                    assert_eq!(file.header.independent_variable.format, "MAG");
                     assert_array_relative_eq!(expected, file.header.independent_variable.data);
                 },
                 e => panic!("{:?}", e),
@@ -470,30 +432,40 @@ mod cti_read_regression_tests {
         fn data() {
             match setup() {
                 Ok(file) => {
-                    let real0: Vec<f64> = vec![1.12134E-3, 4.23145E-3, -0.56815E-3, -1.85942E-3];
-                    let imag0: Vec<f64> = vec![1.73103E-3, -5.36775E-3, 5.32650E-3, -4.07981E-3];
+                    let data0 = vec![
+                        Complex{re:  1.12134E-3, im:  1.73103E-3},
+                        Complex{re:  4.23145E-3, im: -5.36775E-3},
+                        Complex{re: -0.56815E-3, im:  5.32650E-3},
+                        Complex{re: -1.85942E-3, im: -4.07981E-3},
+                    ];
 
-                    let real1: Vec<f64> = vec![2.03895E-2, -4.21371E-2, 0.21038E-2, 1.20315E-2];
-                    let imag1: Vec<f64> = vec![-0.82674E-2, -0.24871E-2, -3.06778E-2, 5.99861E-2];
+                    let data1 = vec![
+                        Complex{re:  2.03895E-2, im: -0.82674E-2},
+                        Complex{re: -4.21371E-2, im: -0.24871E-2},
+                        Complex{re:  0.21038E-2, im: -3.06778E-2},
+                        Complex{re:  1.20315E-2, im: 5.99861E-2 },
+                    ];
 
-                    let real2: Vec<f64> = vec![4.45404E-1, 8.34777E-1, -7.09137E-1, 4.84252E-1];
-                    let imag2: Vec<f64> = vec![4.31518E-1, -1.33056E-1, 5.58410E-1, -8.07098E-1];
+                    let data2 = vec![
+                        Complex{re:  4.45404E-1, im:  4.31518E-1},
+                        Complex{re:  8.34777E-1, im: -1.33056E-1},
+                        Complex{re: -7.09137E-1, im:  5.58410E-1},
+                        Complex{re:  4.84252E-1, im: -8.07098E-1},
+                    ];
+
 
                     assert_eq!(file.data.len(), 3);
-                    assert_eq!(file.data[0].name, Some(String::from("E[1]")));
-                    assert_eq!(file.data[0].format, Some(String::from("RI")));
-                    assert_array_relative_eq!(real0, file.data[0].real);
-                    assert_array_relative_eq!(imag0, file.data[0].imag);
+                    assert_eq!(file.data[0].name, String::from("E[1]"));
+                    assert_eq!(file.data[0].format, String::from("RI"));
+                    assert_complex_array_relative_eq!(data0, file.data[0].samples);
 
-                    assert_eq!(file.data[1].name, Some(String::from("E[2]")));
-                    assert_eq!(file.data[1].format, Some(String::from("RI")));
-                    assert_array_relative_eq!(real1, file.data[1].real);
-                    assert_array_relative_eq!(imag1, file.data[1].imag);
+                    assert_eq!(file.data[1].name, String::from("E[2]"));
+                    assert_eq!(file.data[1].format, String::from("RI"));
+                    assert_complex_array_relative_eq!(data1, file.data[1].samples);
 
-                    assert_eq!(file.data[2].name, Some(String::from("E[3]")));
-                    assert_eq!(file.data[2].format, Some(String::from("RI")));
-                    assert_array_relative_eq!(real2, file.data[2].real);
-                    assert_array_relative_eq!(imag2, file.data[2].imag);
+                    assert_eq!(file.data[2].name, String::from("E[3]"));
+                    assert_eq!(file.data[2].format, String::from("RI"));
+                    assert_complex_array_relative_eq!(data2, file.data[2].samples);
                 },
                 e => panic!("{:?}", e),
             }
@@ -576,12 +548,17 @@ mod cti_write_regression_tests {
             "REGISTER 1",
         ].iter().map(|&s| String::from(s)).collect()});
         record.data.push(DataArray{
-            name: Some(String::from("S")),
-            format: Some(String::from("RI")),
-            real: vec![-1.31189E-3, -3.67867E-3, -3.43990E-3, -2.70664E-4, 0.65892E-4],
-            imag: vec![-1.47980E-3, -0.67782E-3, 0.58746E-3, -9.76175E-4, -9.61571E-4],
+            name: String::from("S"),
+            format: String::from("RI"),
+            samples: vec![
+                Complex::new(-1.31189E-3, -1.47980E-3),
+                Complex::new(-3.67867E-3, -0.67782E-3),
+                Complex::new(-3.43990E-3, 0.58746E-3),
+                Complex::new(-2.70664E-4, -9.76175E-4),
+                Complex::new(0.65892E-4, -9.61571E-4),
+            ],
         });
-        record.header.independent_variable = Var{name: Some(String::from("FREQ")), format: Some(String::from("MAG")), data: vec![0., 1., 2., 3., 4.]};
+        record.header.independent_variable = Var{name: String::from("FREQ"), format: String::from("MAG"), data: vec![0., 1., 2., 3., 4.]};
 
         record
     }

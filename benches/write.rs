@@ -3,22 +3,22 @@ use criterion::{black_box, criterion_group, Criterion};
 use tempfile::tempdir;
 use rand::Rng;
 use std::path::Path;
+use num_complex::Complex;
 
 fn create_record(n: usize) -> citi::Record {
     let mut rng = rand::thread_rng();
 
     let mut record = citi::Record::default();
     record.header.constants.push(citi::Constant{name: String::from("Const Name"), value: String::from("Value")});
-    record.header.independent_variable = citi::Var{name: Some(String::from("Var Name")), format: Some(String::from("Format")), data: vec![1.]};
+    record.header.independent_variable = citi::Var{name: String::from("Var Name"), format: String::from("Format"), data: vec![1.]};
     record.header.devices.push(citi::Device{name: String::from("Name A"), entries: vec![String::from("entry 1"), String::from("entry 2")]});
     record.header.comments.push(String::from("A Comment"));
-    record.header.name = Some(String::from("Name"));
-    record.header.version = Some(String::from("A.01.00"));
+    record.header.name = String::from("Name");
+    record.header.version = String::from("A.01.00");
     record.data.push(citi::DataArray{
-        name: Some(String::from("Data Name A")),
-        format: Some(String::from("Format A")),
-        real: (0..n).map(|_| rng.gen_range(-100.0..100.0)).collect(),
-        imag: (0..n).map(|_| rng.gen_range(-100.0..100.0)).collect(),
+        name: String::from("Data Name A"),
+        format: String::from("Format A"),
+        samples: (0..n).map(|_| Complex{re: rng.gen_range(-100.0..100.0), im: rng.gen_range(-100.0..100.0)}).collect(),
     });
 
     record

@@ -36,6 +36,7 @@
 
 use lazy_static::lazy_static;
 use regex::Regex;
+use num_complex::Complex;
 
 use std::convert::TryFrom;
 use std::str::FromStr;
@@ -46,14 +47,14 @@ use std::fs::File;
 
 use thiserror::Error;
 
+pub mod macros;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Parsing error: `{0}`")]
     ParseError(#[from] ParseError),
     #[error("Reading error: `{0}`")]
     ReaderError(#[from] ReaderError),
-    #[error("Invalid record error: `{0}`")]
-    ValidRecordError(#[from] ValidRecordError),
     #[error("Error writing record: `{0}`")]
     WriteError(#[from] WriteError)
 }
@@ -79,12 +80,6 @@ mod test_error {
         }
 
         #[test]
-        fn valid_record_error() {
-            let error = Error::ValidRecordError(ValidRecordError::NoVersion);
-            assert_eq!(format!("{}", error), "Invalid record error: `Version is not defined`");
-        }
-
-        #[test]
         fn write_error() {
             let error = Error::WriteError(WriteError::NoVersion);
             assert_eq!(format!("{}", error), "Error writing record: `Version is not defined`");
@@ -98,7 +93,7 @@ mod test_error {
         fn from_parse_error() {
             match Error::from(ParseError::BadRegex) {
                 Error::ParseError(ParseError::BadRegex) => (),
-                _ => panic!("Incorrect from parse error"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -106,15 +101,7 @@ mod test_error {
         fn from_reader_error() {
             match Error::from(ReaderError::DataArrayOverIndex) {
                 Error::ReaderError(ReaderError::DataArrayOverIndex) => (),
-                _ => panic!("Incorrect from reader error"),
-            }
-        }
-
-        #[test]
-        fn from_valid_record_error() {
-            match Error::from(ValidRecordError::NoName) {
-                Error::ValidRecordError(ValidRecordError::NoName) => (),
-                _ => panic!("Incorrect from valid error"),
+                e => panic!("{:?}", e),
             }
         }
 
@@ -122,7 +109,7 @@ mod test_error {
         fn from_write_error() {
             match Error::from(WriteError::NoVersion) {
                 Error::WriteError(WriteError::NoVersion) => (),
-                _ => panic!("Incorrect from write error"),
+                e => panic!("{:?}", e),
             }
         }
     }
@@ -184,8 +171,8 @@ pub enum Keywords {
     CITIFile{version: String},
     /// Name. Single word with no spaces. e.g. CAL_SET
     Name(String),
-    /// Independent variable with name, optional format, and number of samples. e.g. VAR FREQ MAG 201
-    Var{name: String, format: Option<String>, length: usize},
+    /// Independent variable with name, format, and number of samples. e.g. VAR FREQ MAG 201
+    Var{name: String, format: String, length: usize},
     /// Constant with name and value. e.g. CONSTANT A A_THING
     Constant{name: String, value: String},
     /// New Device
@@ -284,10 +271,9 @@ impl TryFrom<&str> for Keywords {
             },
             _ if RE_VAR.is_match(line) => {
                 let cap = RE_VAR.captures(line).ok_or(ParseError::BadRegex)?;
-                let closure = |m: String| {if m.is_empty() {None} else {Some(m)}};
                 Ok(Keywords::Var{
                     name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
-                    format: closure(cap.name("Format").map(|m| String::from(m.as_str())).ok_or(ParseError::BadRegex)?),
+                    format: String::from(cap.name("Format").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                     length: cap.name("Length").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<usize>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
                 })
             },
@@ -322,10 +308,7 @@ impl fmt::Display for Keywords {
         match self {
             Keywords::CITIFile{version} => write!(f, "CITIFILE {}", version),
             Keywords::Name(name) => write!(f, "NAME {}", name),
-            Keywords::Var{name, format, length} => match format {
-                Some(form) => write!(f, "VAR {} {} {}", name, form, length),
-                None => write!(f, "VAR {} {}", name, length),
-            },
+            Keywords::Var{name, format, length} => write!(f, "VAR {} {} {}", name, format, length),
             Keywords::Constant{name, value} => write!(f, "CONSTANT {} {}", name, value),
             Keywords::Device{name, value} => write!(f, "#{} {}", name, value),
             Keywords::SegListBegin => write!(f, "SEG_LIST_BEGIN"),
@@ -370,15 +353,9 @@ mod test_keywords {
         }
 
         #[test]
-        fn var_standard() {
-            let keyword = Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 201};
+        fn var() {
+            let keyword = Keywords::Var{name: String::from("FREQ"), format: String::from("MAG"), length: 201};
             assert_eq!("VAR FREQ MAG 201", format!("{}", keyword));
-        }
-
-        #[test]
-        fn var_no_format() {
-            let keyword = Keywords::Var{name: String::from("FREQ"), format: None, length: 202};
-            assert_eq!("VAR FREQ 202", format!("{}", keyword));
         }
 
         #[test]
@@ -574,24 +551,12 @@ mod test_keywords {
         }
 
         #[test]
-        fn var_standard() {
+        fn var() {
             match Keywords::from_str("VAR FREQ MAG 201") {
                 Ok(Keywords::Var{name, format, length}) => {
                     assert_eq!(name, "FREQ");
-                    assert_eq!(format, Some(String::from("MAG")));
+                    assert_eq!(format, "MAG");
                     assert_eq!(length, 201);
-                },
-                e => panic!("{:?}", e),
-            }
-        }
-
-        #[test]
-        fn var_no_format() {
-            match Keywords::from_str("VAR FREQ 202") {
-                Ok(Keywords::Var{name, format, length}) => {
-                    assert_eq!(name, "FREQ");
-                    assert_eq!(format, None);
-                    assert_eq!(length, 202);
                 },
                 e => panic!("{:?}", e),
             }
@@ -875,24 +840,12 @@ mod test_keywords {
         }
 
         #[test]
-        fn var_standard() {
+        fn var() {
             match Keywords::try_from("VAR FREQ MAG 201") {
                 Ok(Keywords::Var{name, format, length}) => {
                     assert_eq!(name, "FREQ");
-                    assert_eq!(format, Some(String::from("MAG")));
+                    assert_eq!(format, "MAG");
                     assert_eq!(length, 201);
-                },
-                e => panic!("{:?}", e),
-            }
-        }
-
-        #[test]
-        fn var_no_format() {
-            match Keywords::try_from("VAR FREQ 202") {
-                Ok(Keywords::Var{name, format, length}) => {
-                    assert_eq!(name, "FREQ");
-                    assert_eq!(format, None);
-                    assert_eq!(length, 202);
                 },
                 e => panic!("{:?}", e),
             }
@@ -1116,24 +1069,24 @@ mod test_device {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Var {
-    pub name: Option<String>,
-    pub format: Option<String>,
+    pub name: String,
+    pub format: String,
     pub data: Vec<f64>,
 }
 
 impl Var {
     fn blank() -> Var {
         Var {
-            name: None,
-            format: None,
+            name: String::new(),
+            format: String::new(),
             data: vec![],
         }
     }
 
-    pub fn new(name: &str, format: Option<String>) -> Var {
+    pub fn new(name: &str, format: &str) -> Var {
         Var {
-            name: Some(String::from(name)),
-            format: format,
+            name: String::from(name),
+            format: String::from(format),
             data: vec![],
         }
     }
@@ -1163,14 +1116,14 @@ mod test_var {
     #[test]
     fn test_blank() {
         let result = Var::blank();
-        let expected = Var {name: None, format: None, data: vec![]};
+        let expected = Var {name: String::new(), format: String::new(), data: vec![]};
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_new() {
-        let result = Var::new("Name", None);
-        let expected = Var {name: Some(String::from("Name")), format: None, data: vec![]};
+        let result = Var::new("Name", "Format");
+        let expected = Var {name: String::from("Name"), format: String::from("Format"), data: vec![]};
         assert_eq!(result, expected);
     }
 
@@ -1179,14 +1132,14 @@ mod test_var {
 
         #[test]
         fn empty() {
-            let mut var = Var {name: None, format: None, data: vec![]};
+            let mut var = Var {name: String::new(), format: String::new(), data: vec![]};
             var.push(1.);
             assert_eq!(vec![1.], var.data);
         }
 
         #[test]
         fn double() {
-            let mut var = Var {name: None, format: None, data: vec![]};
+            let mut var = Var {name: String::new(), format: String::new(), data: vec![]};
             var.push(1.);
             var.push(2.);
             assert_eq!(vec![1., 2.], var.data);
@@ -1194,7 +1147,7 @@ mod test_var {
 
         #[test]
         fn existing() {
-            let mut var = Var {name: None, format: None, data: vec![1.]};
+            let mut var = Var {name: String::new(), format: String::new(), data: vec![1.]};
             var.push(2.);
             assert_eq!(vec![1., 2.], var.data);
         }
@@ -1205,35 +1158,35 @@ mod test_var {
 
         #[test]
         fn number_zero() {
-            let mut var = Var {name: None, format: None, data: vec![]};
+            let mut var = Var {name: String::new(), format: String::new(), data: vec![]};
             var.seq(1., 2., 0);
             assert_eq!(Vec::<f64>::new(), var.data);
         }
 
         #[test]
         fn number_one() {
-            let mut var = Var {name: None, format: None, data: vec![]};
+            let mut var = Var {name: String::new(), format: String::new(), data: vec![]};
             var.seq(10., 20., 1);
             assert_eq!(vec![10.], var.data);
         }
 
         #[test]
         fn simple() {
-            let mut var = Var {name: None, format: None, data: vec![]};
+            let mut var = Var {name: String::new(), format: String::new(), data: vec![]};
             var.seq(1., 2., 2);
             assert_eq!(vec![1., 2.], var.data);
         }
 
         #[test]
         fn triple() {
-            let mut var = Var {name: None, format: None, data: vec![]};
+            let mut var = Var {name: String::new(), format: String::new(), data: vec![]};
             var.seq(2000000000., 3000000000., 3);
             assert_eq!(vec![2000000000., 2500000000., 3000000000.], var.data);
         }
 
         #[test]
         fn reversed() {
-            let mut var = Var {name: None, format: None, data: vec![]};
+            let mut var = Var {name: String::new(), format: String::new(), data: vec![]};
             var.seq(3000000000., 2000000000., 3);
             assert_eq!(vec![3000000000., 2500000000., 2000000000.], var.data);
         }
@@ -1272,8 +1225,8 @@ mod test_constant {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Header {
-    pub version: Option<String>,
-    pub name: Option<String>,
+    pub version: String,
+    pub name: String,
     pub comments: Vec<String>,
     pub devices: Vec<Device>,
     pub independent_variable: Var,
@@ -1283,8 +1236,8 @@ pub struct Header {
 impl Default for Header {
     fn default() -> Self {
         Header {
-            version: Some(String::from("A.01.00")),
-            name: Some(String::from("Name")),
+            version: String::from("A.01.00"),
+            name: String::new(),
             comments: vec![],
             devices: vec![],
             independent_variable: Var::blank(),
@@ -1296,8 +1249,8 @@ impl Default for Header {
 impl Header {
     pub fn new(version: &str, name: &str) -> Header {
         Header {
-            version: Some(String::from(version)),
-            name: Some(String::from(name)),
+            version: String::from(version),
+            name: String::from(name),
             comments: vec![],
             devices: vec![],
             independent_variable: Var::blank(),
@@ -1307,8 +1260,8 @@ impl Header {
 
     fn blank() -> Header {
         Header {
-            version: None,
-            name: None,
+            version: String::new(),
+            name: String::new(),
             comments: vec![],
             devices: vec![],
             independent_variable: Var::blank(),
@@ -1347,11 +1300,11 @@ mod test_header {
     #[test]
     fn test_default() {
         let expected = Header {
-            version: Some(String::from("A.01.00")),
-            name: Some(String::from("Name")),
+            version: String::from("A.01.00"),
+            name: String::new(),
             comments: vec![],
             devices: vec![],
-            independent_variable: Var {name: None, format: None, data: vec![]},
+            independent_variable: Var {name: String::new(), format: String::new(), data: vec![]},
             constants: vec![],
         };
         let result = Header::default();
@@ -1361,11 +1314,11 @@ mod test_header {
     #[test]
     fn test_new() {
         let expected = Header {
-            version: Some(String::from("A.01.01")),
-            name: Some(String::from("A_NAME")),
+            version: String::from("A.01.01"),
+            name: String::from("A_NAME"),
             comments: vec![],
             devices: vec![],
-            independent_variable: Var {name: None, format: None, data: vec![]},
+            independent_variable: Var {name: String::new(), format: String::new(), data: vec![]},
             constants: vec![],
         };
         let result = Header::new("A.01.01", "A_NAME");
@@ -1496,35 +1449,31 @@ mod test_header {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct DataArray {
-    pub name: Option<String>,
-    pub format: Option<String>,
-    pub real: Vec<f64>,
-    pub imag: Vec<f64>,
+    pub name: String,
+    pub format: String,
+    pub samples: Vec<Complex<f64>>,
 }
 
 impl DataArray {
     #[cfg(test)]
     fn blank() -> DataArray {
         DataArray {
-            name: None,
-            format: None,
-            real: vec![],
-            imag: vec![],
+            name: String::new(),
+            format: String::new(),
+            samples: vec![],
         }
     }
 
     pub fn new(name: &str, format: &str) -> DataArray {
         DataArray {
-            name: Some(String::from(name)),
-            format: Some(String::from(format)),
-            real: vec![],
-            imag: vec![],
+            name: String::from(name),
+            format: String::from(format),
+            samples: vec![],
         }
     }
 
     pub fn add_sample(&mut self, real: f64, imag: f64) {
-        self.real.push(real);
-        self.imag.push(imag);
+        self.samples.push(Complex::<f64>::new(real, imag));
     }
 }
 
@@ -1534,14 +1483,14 @@ mod test_data_array {
 
     #[test]
     fn test_blank() {
-        let expected = DataArray {name: None, format: None, real: vec![], imag: vec![]};
+        let expected = DataArray {name: String::new(), format: String::new(), samples: vec![]};
         let result = DataArray::blank();
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_new() {
-        let expected = DataArray {name: Some(String::from("S")), format: Some(String::from("RI")), real: vec![], imag: vec![]};
+        let expected = DataArray {name: String::from("S"), format: String::from("RI"), samples: vec![]};
         let result = DataArray::new("S", "RI");
         assert_eq!(result, expected);
     }
@@ -1552,27 +1501,24 @@ mod test_data_array {
 
         #[test]
         fn empty() {
-            let mut result = DataArray {name: None, format: None, real: vec![], imag: vec![]};
+            let mut result = DataArray {name: String::new(), format: String::new(), samples: vec![]};
             result.add_sample(1., 2.);
-            assert_eq!(result.real, vec![1.]);
-            assert_eq!(result.imag, vec![2.]);
+            assert_complex_array_relative_eq!(result.samples, vec![Complex{re: 1., im: 2.}]);
         }
 
         #[test]
         fn double() {
-            let mut result = DataArray {name: None, format: None, real: vec![], imag: vec![]};
+            let mut result = DataArray {name: String::new(), format: String::new(), samples: vec![]};
             result.add_sample(1., 2.);
             result.add_sample(-1., -2.);
-            assert_eq!(result.real, vec![1., -1.]);
-            assert_eq!(result.imag, vec![2., -2.]);
+            assert_complex_array_relative_eq!(result.samples, vec![Complex{re: 1., im: 2.}, Complex{re: -1., im: -2.}]);
         }
 
         #[test]
         fn existing() {
-            let mut result = DataArray {name: None, format: None, real: vec![1.], imag: vec![2.]};
+            let mut result = DataArray {name: String::new(), format: String::new(), samples: vec![Complex{re: 1., im: 2.}]};
             result.add_sample(3., 4.);
-            assert_eq!(result.real, vec![1., 3.]);
-            assert_eq!(result.imag, vec![2., 4.]);
+            assert_complex_array_relative_eq!(result.samples, vec![Complex{re: 1., im: 2.}, Complex{re: 3., im: 4.}]);
         }
     }
 }
@@ -1593,68 +1539,6 @@ impl Default for Record {
 }
 
 #[derive(Error, Debug)]
-pub enum ValidRecordError {
-    #[error("Version is not defined")]
-    NoVersion,
-    #[error("Name is not defined")]
-    NoName,
-    #[error("Indepent variable is not defined")]
-    NoIndependentVariable,
-    #[error("Data name and format is not defined")]
-    NoData,
-    #[error("Independent variable and data array {2} are different lengths ({0} != {1})")]
-    VarAndDataDifferentLengths(usize, usize, usize),
-    #[error("Data array {2} has different length real and imaginary components ({0} != {1})")]
-    RealImagDoNotMatch(usize, usize, usize),
-}
-type ValidRecordResult<T> = std::result::Result<T, ValidRecordError>;
-
-#[cfg(test)]
-mod test_valid_record_error {
-    use super::*;
-
-    mod test_display {
-        use super::*;
-
-        #[test]
-        fn no_version() {
-            let error = ValidRecordError::NoVersion;
-            assert_eq!(format!("{}", error), "Version is not defined");
-        }
-
-        #[test]
-        fn no_name() {
-            let error = ValidRecordError::NoName;
-            assert_eq!(format!("{}", error), "Name is not defined");
-        }
-
-        #[test]
-        fn no_independent_variable() {
-            let error = ValidRecordError::NoIndependentVariable;
-            assert_eq!(format!("{}", error), "Indepent variable is not defined");
-        }
-
-        #[test]
-        fn no_data() {
-            let error = ValidRecordError::NoData;
-            assert_eq!(format!("{}", error), "Data name and format is not defined");
-        }
-
-        #[test]
-        fn var_and_data() {
-            let error = ValidRecordError::VarAndDataDifferentLengths(1, 2, 3);
-            assert_eq!(format!("{}", error), "Independent variable and data array 3 are different lengths (1 != 2)");
-        }
-
-        #[test]
-        fn data_real_imag_do_not_match() {
-            let error = ValidRecordError::RealImagDoNotMatch(1, 2, 0);
-            assert_eq!(format!("{}", error), "Data array 0 has different length real and imaginary components (1 != 2)");
-        }
-    }
-}
-
-#[derive(Error, Debug)]
 pub enum WriteError {
     #[error("Version is not defined")]
     NoVersion,
@@ -1664,10 +1548,6 @@ pub enum WriteError {
     NoDataName(usize),
     #[error("Data array {0} has no format")]
     NoDataFormat(usize),
-    #[error("Var has no name")]
-    NoVarName,
-    #[error("Data array {2} has different length real and imaginary components ({0} != {1})")]
-    RealImagDoNotMatch(usize, usize, usize),
     #[error("Cannot write record to `{0}`: {1}")]
     CannotWrite(PathBuf, std::io::Error),
     #[error("Writing error occured: {0}")]
@@ -1720,18 +1600,6 @@ mod test_write_result {
         }
 
         #[test]
-        fn no_var_name() {
-            let error = WriteError::NoVarName;
-            assert_eq!(format!("{}", error), "Var has no name");
-        }
-
-        #[test]
-        fn real_image_do_not_match() {
-            let error = WriteError::RealImagDoNotMatch(0, 1, 2);
-            assert_eq!(format!("{}", error), "Data array 2 has different length real and imaginary components (0 != 1)");
-        }
-
-        #[test]
         fn cannot_write() {
             let error = WriteError::CannotWrite(Path::new("/temp").to_path_buf(), std::io::ErrorKind::NotFound.into());
             assert_eq!(format!("{}", error), "Cannot write record to `/temp`: entity not found");
@@ -1770,7 +1638,7 @@ impl Record {
                 state = state.process_keyword(keyword)?;
             }
         }
-        Ok(state.record.validate_record()?)
+        Ok(state.validate_record()?.record)
     }
 
     pub fn write<P: AsRef<Path>>(&self, path: &P)  -> Result<()> {
@@ -1792,16 +1660,11 @@ impl Record {
         let mut keywords: Vec<Keywords> = vec![];
 
         // Add each array
-        for (i, array) in self.data.iter().enumerate() {
+        for array in self.data.iter() {
             keywords.push(Keywords::Begin);
 
-            // Check lengths
-            if array.real.len() != array.imag.len() {
-                return Err(WriteError::RealImagDoNotMatch(array.real.len(), array.imag.len(), i));
-            }
-
-            for (&real, &imag) in array.real.iter().zip(array.imag.iter()) {
-                keywords.push(Keywords::DataPair{real: real, imag: imag});
+            for Complex{re: real, im: imag} in array.samples.iter() {
+                keywords.push(Keywords::DataPair{real: *real, imag: *imag});
             }
             keywords.push(Keywords::End);
         }
@@ -1813,26 +1676,26 @@ impl Record {
         let mut keywords: Vec<Keywords> = vec![];
 
         for (i, array) in self.data.iter().enumerate() {
-            match (&array.name, &array.format) {
-                (Some(ref n), Some(ref f)) => keywords.push(Keywords::Data{name: n.clone(), format: f.clone()}),
-                (None, _) => return Err(WriteError::NoDataName(i)),
-                (_, None) => return Err(WriteError::NoDataFormat(i)),
+            match (array.name.len() > 0, array.format.len() > 0) {
+                (false, _) => return Err(WriteError::NoDataName(i)),
+                (_, false) => return Err(WriteError::NoDataFormat(i)),
+                (_, _) => keywords.push(Keywords::Data{name: array.name.clone(), format: array.format.clone()}),
             }
         }
         Ok(keywords)
     }
 
     fn get_version_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        match self.header.version {
-            Some(ref v) => Ok(vec![Keywords::CITIFile{version: v.clone()}]),
-            None => Err(WriteError::NoVersion),
+        match self.header.version.len() > 0 {
+            true => Ok(vec![Keywords::CITIFile{version: self.header.version.clone()}]),
+            false => Err(WriteError::NoVersion),
         }
     }
 
     fn get_name_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        match self.header.name {
-            Some(ref v) => Ok(vec![Keywords::Name(v.clone())]),
-            None => Err(WriteError::NoName),
+        match self.header.name.len() > 0 {
+            true => Ok(vec![Keywords::Name(self.header.name.clone())]),
+            false => Err(WriteError::NoName),
         }
     }
 
@@ -1853,14 +1716,11 @@ impl Record {
     }
 
     fn get_independent_variable_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        match self.header.independent_variable.name {
-            Some(ref n) => Ok(vec![Keywords::Var{
-                name: n.clone(),
+        Ok(vec![Keywords::Var{
+            name: self.header.independent_variable.name.clone(),
                 format: self.header.independent_variable.format.clone(),
                 length: self.header.independent_variable.data.len()
-            }]),
-            None => Err(WriteError::NoVarName)
-        }
+        }])
     }
 
     fn get_var_keywords(&self) -> WriteResult<Vec<Keywords>> {
@@ -1905,72 +1765,6 @@ impl Record {
             data: vec![],
         }
     }
-
-    pub fn validate_record(self) -> ValidRecordResult<Self> {
-        self.has_name()?
-            .has_version()?
-            .has_var()?
-            .has_data()?
-            .var_and_data_same_length()?
-            .data_real_image_same_length()
-    }
-
-    fn has_version(self) -> ValidRecordResult<Self> {
-        match self.header.version {
-            Some(_) => Ok(self),
-            None => Err(ValidRecordError::NoVersion),
-        }
-    }
-
-    fn has_name(self) -> ValidRecordResult<Self> {
-        match self.header.name {
-            Some(_) => Ok(self),
-            None => Err(ValidRecordError::NoName),
-        }
-    }
-
-    fn has_var(self) -> ValidRecordResult<Self> {
-        match self.header.independent_variable.name {
-            Some(_) => Ok(self),
-            None => Err(ValidRecordError::NoIndependentVariable),
-        }
-    }
-
-    fn has_data(self) -> ValidRecordResult<Self> {
-        match self.data.len() {
-            0 => Err(ValidRecordError::NoData),
-            _ => Ok(self),
-        }
-    }
-
-    /// Zero length var with variable length data allowed
-    fn var_and_data_same_length(self) -> ValidRecordResult<Self> {
-        let mut n = self.header.independent_variable.data.len();
-
-        for (i, data_array) in self.data.iter().enumerate() {
-            let k = data_array.real.len();
-            if n == 0 {
-                n = k
-            } else {
-                if n != k {
-                    return Err(ValidRecordError::VarAndDataDifferentLengths(n, k, i))
-                }
-            }
-        }
-        Ok(self)
-    }
-
-    fn data_real_image_same_length(self) -> ValidRecordResult<Self> {
-        for (i, data_array) in self.data.iter().enumerate() {
-            let real_size = data_array.real.len();
-            let imag_size = data_array.imag.len();
-
-            if real_size != imag_size {
-                return Err(ValidRecordError::RealImagDoNotMatch(real_size, imag_size, i));
-            }
-        }
-        Ok(self)
-    }
 }
 
 #[cfg(test)]
@@ -1993,19 +1787,19 @@ mod test_record {
         fn get_keywords() {
             let mut record = Record::default();
             record.header.constants.push(Constant{name: String::from("Const Name"), value: String::from("Value")});
-            record.header.independent_variable = Var{name: Some(String::from("Var Name")), format: Some(String::from("Format")), data: vec![1.]};
+            record.header.independent_variable = Var{name: String::from("Var Name"), format: String::from("Format"), data: vec![1.]};
             record.header.devices.push(Device{name: String::from("Name A"), entries: vec![String::from("entry 1"), String::from("entry 2")]});
             record.header.comments.push(String::from("A Comment"));
-            record.header.name = Some(String::from("Name"));
-            record.header.version = Some(String::from("A.01.00"));
-            record.data.push(DataArray{name: Some(String::from("Data Name A")), format: Some(String::from("Format A")), real: vec![1.], imag: vec![2.]});
-            record.data.push(DataArray{name: Some(String::from("Data Name B")), format: Some(String::from("Format B")), real: vec![3., 4.], imag: vec![5., 6.]});
+            record.header.name = String::from("Name");
+            record.header.version = String::from("A.01.00");
+            record.data.push(DataArray{name: String::from("Data Name A"), format: String::from("Format A"), samples: vec![Complex{re: 1., im: 2.}]});
+            record.data.push(DataArray{name: String::from("Data Name B"), format: String::from("Format B"), samples: vec![Complex{re: 3., im: 5.}, Complex{re: 4., im: 6.}]});
 
             match record.get_keywords() {
                 Ok(v) => assert_eq!(v, vec![
                     Keywords::CITIFile{version: String::from("A.01.00")},
                     Keywords::Name(String::from("Name")),
-                    Keywords::Var{name: String::from("Var Name"), format: Some(String::from("Format")), length: 1},
+                    Keywords::Var{name: String::from("Var Name"), format: String::from("Format"), length: 1},
                     Keywords::VarListBegin,
                     Keywords::VarListItem(1.),
                     Keywords::VarListEnd,
@@ -2113,22 +1907,13 @@ mod test_record {
             use super::*;
 
             #[test]
-            fn no_name() {
-                let record = Record::default();
-                match record.get_independent_variable_keywords() {
-                    Err(WriteError::NoVarName) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
             fn no_format() {
                 let mut record = Record::default();
-                record.header.independent_variable.name = Some(String::from("Name"));
+                record.header.independent_variable.name = String::from("Name");
                 match record.get_independent_variable_keywords() {
                     Ok(v) => assert_eq!(v, vec![Keywords::Var{
                         name: String::from("Name"),
-                        format: None,
+                        format: String::new(),
                         length: 0
                     }]),
                     e => panic!("{:?}", e),
@@ -2138,12 +1923,12 @@ mod test_record {
             #[test]
             fn format() {
                 let mut record = Record::default();
-                record.header.independent_variable.name = Some(String::from("Name"));
-                record.header.independent_variable.format = Some(String::from("Format"));
+                record.header.independent_variable.name = String::from("Name");
+                record.header.independent_variable.format = String::from("Format");
                 match record.get_independent_variable_keywords() {
                     Ok(v) => assert_eq!(v, vec![Keywords::Var{
                         name: String::from("Name"),
-                        format: Some(String::from("Format")),
+                        format: String::from("Format"),
                         length: 0
                     }]),
                     e => panic!("{:?}", e),
@@ -2153,13 +1938,13 @@ mod test_record {
             #[test]
             fn length() {
                 let mut record = Record::default();
-                record.header.independent_variable.name = Some(String::from("Name"));
-                record.header.independent_variable.format = Some(String::from("Format"));
+                record.header.independent_variable.name = String::from("Name");
+                record.header.independent_variable.format = String::from("Format");
                 record.header.independent_variable.data = vec![0.; 10];
                 match record.get_independent_variable_keywords() {
                     Ok(v) => assert_eq!(v, vec![Keywords::Var{
                         name: String::from("Name"),
-                        format: Some(String::from("Format")),
+                        format: String::from("Format"),
                         length: 10
                     }]),
                     e => panic!("{:?}", e),
@@ -2272,7 +2057,7 @@ mod test_record {
             #[test]
             fn none() {
                 let mut record = Record::default();
-                record.header.name = None;
+                record.header.name = String::new();
                 match record.get_name_keywords() {
                     Err(WriteError::NoName) => (),
                     e => panic!("{:?}", e),
@@ -2282,7 +2067,7 @@ mod test_record {
             #[test]
             fn some() {
                 let mut record = Record::default();
-                record.header.name = Some(String::from("A.01.00"));
+                record.header.name = String::from("A.01.00");
                 match record.get_name_keywords() {
                     Ok(v) => assert_eq!(v, vec![Keywords::Name(String::from("A.01.00"))]),
                     e => panic!("{:?}", e),
@@ -2296,7 +2081,7 @@ mod test_record {
             #[test]
             fn none() {
                 let mut record = Record::default();
-                record.header.version = None;
+                record.header.version = String::new();
                 match record.get_version_keywords() {
                     Err(WriteError::NoVersion) => (),
                     e => panic!("{:?}", e),
@@ -2306,7 +2091,7 @@ mod test_record {
             #[test]
             fn some() {
                 let mut record = Record::default();
-                record.header.version = Some(String::from("A.01.00"));
+                record.header.version = String::from("A.01.00");
                 match record.get_version_keywords() {
                     Ok(v) => assert_eq!(v, vec![Keywords::CITIFile{version: String::from("A.01.00")}]),
                     e => panic!("{:?}", e),
@@ -2320,7 +2105,11 @@ mod test_record {
             #[test]
             fn many_values() {
                 let mut record = Record::default();
-                record.data.push(DataArray{name: None, format: None, real: vec![1., 2., -3.], imag: vec![4., 1e-6, 0.]});
+                record.data.push(DataArray{name: String::new(), format: String::new(), samples: vec![
+                    Complex{re:  1., im: 4.},
+                    Complex{re:  2., im: 1e-6},
+                    Complex{re: -3., im: 0.},
+                ]});
                 match record.get_data_keywords() {
                     Ok(v) => assert_eq!(v, vec![
                         Keywords::Begin,
@@ -2336,7 +2125,7 @@ mod test_record {
             #[test]
             fn one_array_gives_correct_result() {
                 let mut record = Record::default();
-                record.data.push(DataArray{name: None, format: None, real: vec![1.], imag: vec![2.]});
+                record.data.push(DataArray{name: String::new(), format: String::new(), samples: vec![Complex{re: 1., im: 2.}]});
                 match record.get_data_keywords() {
                     Ok(v) => assert_eq!(v, vec![Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End]),
                     e => panic!("{:?}", e),
@@ -2346,8 +2135,8 @@ mod test_record {
             #[test]
             fn multiple_array_gives_correct_result() {
                 let mut record = Record::default();
-                record.data.push(DataArray{name: None, format: None, real: vec![1.], imag: vec![2.]});
-                record.data.push(DataArray{name: None, format: None, real: vec![3.], imag: vec![4.]});
+                record.data.push(DataArray{name: String::new(), format: String::new(), samples: vec![Complex{re: 1., im: 2.}]});
+                record.data.push(DataArray{name: String::new(), format: String::new(), samples: vec![Complex{re: 3., im: 4.}]});
                 match record.get_data_keywords() {
                     Ok(v) => assert_eq!(v, vec![
                             Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End,
@@ -2365,27 +2154,6 @@ mod test_record {
                     e => panic!("{:?}", e),
                 }
             }
-
-            #[test]
-            fn bad_real_imag_gives_error() {
-                let mut record = Record::default();
-                record.data.push(DataArray{name: None, format: None, real: vec![1., 2.], imag: vec![1.]});
-                match record.get_data_keywords() {
-                    Err(WriteError::RealImagDoNotMatch(2, 1, 0)) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn bad_real_imag_gives_error_with_correct_array_count() {
-                let mut record = Record::default();
-                record.data.push(DataArray{name: None, format: None, real: vec![1., 2.], imag: vec![1., 2.]});
-                record.data.push(DataArray{name: None, format: None, real: vec![1., 2., 3.], imag: vec![1., 2.]});
-                match record.get_data_keywords() {
-                    Err(WriteError::RealImagDoNotMatch(3, 2, 1)) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
         }
 
         mod test_get_data_defines_keywords {
@@ -2394,18 +2162,18 @@ mod test_record {
             #[test]
             fn one_entry() {
                 let mut record = Record::default();
-                record.data.push(DataArray{name: Some(String::from("Name")), format: Some(String::from("Format")), real: vec![], imag: vec![]});
+                record.data.push(DataArray{name: String::from("Name"), format: String::from("Format"), samples: vec![]});
                 match record.get_data_defines_keywords() {
                     Ok(v) => assert_eq!(v, vec![Keywords::Data{name: String::from("Name"), format: String::from("Format")}]),
-                    _ => panic!("One entry fails"),
+                    e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn multiple() {
                 let mut record = Record::default();
-                record.data.push(DataArray{name: Some(String::from("Name A")), format: Some(String::from("Format A")), real: vec![], imag: vec![]});
-                record.data.push(DataArray{name: Some(String::from("Name B")), format: Some(String::from("Format B")), real: vec![], imag: vec![]});
+                record.data.push(DataArray{name: String::from("Name A"), format: String::from("Format A"), samples: vec![]});
+                record.data.push(DataArray{name: String::from("Name B"), format: String::from("Format B"), samples: vec![]});
                 match record.get_data_defines_keywords() {
                     Ok(v) => {
                         assert_eq!(v, vec![
@@ -2413,37 +2181,37 @@ mod test_record {
                             Keywords::Data{name: String::from("Name B"), format: String::from("Format B")}
                         ]);
                     },
-                    _ => panic!("Multiple entries fails"),
+                    e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn no_name() {
                 let mut record = Record::default();
-                record.data.push(DataArray{name: None, format: Some(String::from("")), real: vec![], imag: vec![]});
+                record.data.push(DataArray{name: String::new(), format: String::from("Format"), samples: vec![]});
                 match record.get_data_defines_keywords() {
                     Err(WriteError::NoDataName(0)) => (),
-                    _ => panic!("No name gives incorrect error"),
+                    e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn no_format() {
                 let mut record = Record::default();
-                record.data.push(DataArray{name: Some(String::from("")), format: None, real: vec![], imag: vec![]});
+                record.data.push(DataArray{name: String::from("Name"), format: String::new(), samples: vec![]});
                 match record.get_data_defines_keywords() {
                     Err(WriteError::NoDataFormat(0)) => (),
-                    _ => panic!("No format gives incorrect error"),
+                    e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn no_name_no_format() {
                 let mut record = Record::default();
-                record.data.push(DataArray{name: None, format: None, real: vec![], imag: vec![]});
+                record.data.push(DataArray{name: String::new(), format: String::new(), samples: vec![]});
                 match record.get_data_defines_keywords() {
                     Err(WriteError::NoDataName(0)) => (),
-                    _ => panic!("No name no format does not give correct error"),
+                    e => panic!("{:?}", e),
                 }
             }
         }
@@ -2452,12 +2220,11 @@ mod test_record {
     #[cfg(test)]
     mod test_read {
         use super::*;
-        use approx::*;
 
         #[test]
         fn cannot_read_empty_record() {
             match Record::read_from_source(&mut "".as_bytes()) {
-                Err(Error::ValidRecordError(ValidRecordError::NoName)) => (),
+                Err(Error::ReaderError(ReaderError::NoName)) => (),
                 e => panic!("{:?}", e),
             }
         }
@@ -2492,7 +2259,7 @@ mod test_record {
             #[test]
             fn name() {
                 match setup() {
-                    Ok(record) => assert_eq!(record.header.name, Some(String::from("MEMORY"))),
+                    Ok(record) => assert_eq!(record.header.name, "MEMORY"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2500,7 +2267,7 @@ mod test_record {
             #[test]
             fn version() {
                 match setup() {
-                    Ok(record) => assert_eq!(record.header.version, Some(String::from("A.01.00"))),
+                    Ok(record) => assert_eq!(record.header.version, "A.01.00"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2533,8 +2300,8 @@ mod test_record {
             fn independent_variable() {
                 match setup() {
                     Ok(record) => {
-                        assert_eq!(record.header.independent_variable.name, Some(String::from("FREQ")));
-                        assert_eq!(record.header.independent_variable.format, Some(String::from("MAG")));
+                        assert_eq!(record.header.independent_variable.name, "FREQ");
+                        assert_eq!(record.header.independent_variable.format, "MAG");
                         assert_eq!(record.header.independent_variable.data.len(), 0);
                     },
                     e => panic!("{:?}", e),
@@ -2546,358 +2313,15 @@ mod test_record {
                 match setup() {
                     Ok(record) => {
                         assert_eq!(record.data.len(), 1);
-                        assert_eq!(record.data[0].name, Some(String::from("S")));
-                        assert_eq!(record.data[0].format, Some(String::from("RI")));
-                        assert_eq!(record.data[0].real.len(), 3);
-                        assert_eq!(record.data[0].imag.len(), 3);
-                        assert_relative_eq!(record.data[0].real[0], -0.0354545);
-                        assert_relative_eq!(record.data[0].real[1], 0.00023491);
-                        assert_relative_eq!(record.data[0].real[2], 0.00200382);
-                        assert_relative_eq!(record.data[0].imag[0], -0.00138601);
-                        assert_relative_eq!(record.data[0].imag[1], -0.00139883);
-                        assert_relative_eq!(record.data[0].imag[2], -0.00140022);
+                        assert_eq!(record.data[0].name, "S");
+                        assert_eq!(record.data[0].format, "RI");
+                        assert_eq!(record.data[0].samples.len(), 3);
+                        assert_complex_array_relative_eq!(record.data[0].samples, vec![
+                            Complex{re: -0.0354545, im: -0.00138601},
+                            Complex{re: 0.00023491, im: -0.00139883},
+                            Complex{re: 0.00200382, im: -0.00140022},
+                        ]);
                     },
-                    e => panic!("{:?}", e),
-                }
-            }
-        }
-    }
-
-    #[cfg(test)]
-    mod test_validate_record {
-        use super::*;
-
-        fn create_valid_record() -> Record {
-            let mut record = Record::blank();
-            record.header.name = Some(String::from("CAL_SET"));
-            record.header.version = Some(String::from("A.01.00"));
-            record.data.push(DataArray::new("E", "RI"));
-            record.header.independent_variable.name = Some(String::from("FREQ"));
-            record
-        }
-
-        #[test]
-        fn test_valid_record() {
-            let record = create_valid_record();
-            match record.validate_record() {
-                Ok(r) => assert_eq!(r, create_valid_record()),
-                e => panic!("{:?}", e),
-            }
-        }
-
-        #[test]
-        fn test_no_data() {
-            let mut record = create_valid_record();
-            record.data = vec![];
-            match record.validate_record() {
-                Err(ValidRecordError::NoData) => (),
-                e => panic!("{:?}", e),
-            }
-        }
-
-        #[test]
-        fn test_no_version() {
-            let mut record = create_valid_record();
-            record.header.version = None;
-            match record.validate_record() {
-                Err(ValidRecordError::NoVersion) => (),
-                e => panic!("{:?}", e),
-            }
-        }
-
-        #[test]
-        fn test_no_name() {
-            let mut record = create_valid_record();
-            record.header.name = None;
-            match record.validate_record() {
-                Err(ValidRecordError::NoName) => (),
-                e => panic!("{:?}", e),
-            }
-        }
-
-        #[test]
-        fn test_no_var() {
-            let mut record = create_valid_record();
-            record.header.independent_variable.name = None;
-            match record.validate_record() {
-                Err(ValidRecordError::NoIndependentVariable) => (),
-                e => panic!("{:?}", e),
-            }
-        }
-
-        #[test]
-        fn test_var_and_data_different() {
-            let mut record = create_valid_record();
-            record.header.independent_variable.data = vec![1.];
-            match record.validate_record() {
-                Err(ValidRecordError::VarAndDataDifferentLengths(1, 0, 0)) => (),
-                e => panic!("{:?}", e),
-            }
-        }
-
-        #[test]
-        fn test_real_imag_do_not_match() {
-            let mut record = create_valid_record();
-            record.data[0] = DataArray{
-                name: None,
-                format: None,
-                real: vec![1., 2., 3.],
-                imag: vec![1., 2., 3., 4.],
-            };
-            record.header.independent_variable.data = vec![1., 2., 3.];
-            match record.validate_record() {
-                Err(ValidRecordError::RealImagDoNotMatch(3, 4, 0)) => (),
-                e => panic!("{:?}", e),
-            }
-        }
-
-        #[cfg(test)]
-        mod test_has_data {
-            use super::*;
-
-            #[test]
-            fn fail_on_no_version() {
-                let record = Record::blank();
-                match record.has_data() {
-                    Err(ValidRecordError::NoData) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn pass_on_name() {
-                let mut expected = Record::blank();
-                expected.data.push(DataArray::new("E", "RI"));
-                let mut record = Record::blank();
-                record.data.push(DataArray::new("E", "RI"));
-                match record.has_data() {
-                    Ok(r) => assert_eq!(r, expected),
-                    e => panic!("{:?}", e),
-                }
-            }
-        }
-
-        #[cfg(test)]
-        mod test_has_var {
-            use super::*;
-
-            #[test]
-            fn fail_on_no_version() {
-                let record = Record::blank();
-                match record.has_var() {
-                    Err(ValidRecordError::NoIndependentVariable) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn pass_on_name() {
-                let mut expected = Record::blank();
-                expected.header.independent_variable.name = Some(String::from("FREQ"));
-                let mut record = Record::blank();
-                record.header.independent_variable.name = Some(String::from("FREQ"));
-                match record.has_var() {
-                    Ok(r) => assert_eq!(r, expected),
-                    e => panic!("{:?}", e),
-                }
-            }
-        }
-
-        #[cfg(test)]
-        mod test_has_version {
-            use super::*;
-
-            #[test]
-            fn fail_on_no_version() {
-                let record = Record::blank();
-                match record.has_version() {
-                    Err(ValidRecordError::NoVersion) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn pass_on_name() {
-                let mut expected = Record::blank();
-                expected.header.version = Some(String::from("A.01.00"));
-                let mut record = Record::blank();
-                record.header.version = Some(String::from("A.01.00"));
-                match record.has_version() {
-                    Ok(r) => assert_eq!(r, expected),
-                    e => panic!("{:?}", e),
-                }
-            }
-        }
-
-        #[cfg(test)]
-        mod test_has_name {
-            use super::*;
-
-            #[test]
-            fn fail_on_no_name() {
-                let record = Record::blank();
-                match record.has_name() {
-                    Err(ValidRecordError::NoName) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn pass_on_name() {
-                let mut expected = Record::blank();
-                expected.header.name = Some(String::from("CAL_SET"));
-                let mut record = Record::blank();
-                record.header.name = Some(String::from("CAL_SET"));
-                match record.has_name() {
-                    Ok(r) => assert_eq!(r, expected),
-                    e => panic!("{:?}", e),
-                }
-            }
-        }
-
-        #[cfg(test)]
-        mod test_var_data_different_lengths {
-            use super::*;
-
-            #[test]
-            fn pass_on_blank() {
-                let record = Record::blank();
-                match record.var_and_data_same_length() {
-                    Ok(r) => assert_eq!(r, Record::blank()),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn pass_on_equal() {
-                let mut record = Record::blank();
-                record.data.push(DataArray{
-                    name: None,
-                    format: None,
-                    real: vec![1.],
-                    imag: vec![1.],
-                });
-                record.header.independent_variable.data = vec![1.];
-                match record.clone().var_and_data_same_length() {
-                    Ok(r) => assert_eq!(r, record),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn pass_on_var_zero_data_some() {
-                let mut record = Record::blank();
-                record.data.push(DataArray{
-                    name: None,
-                    format: None,
-                    real: vec![1., 2.],
-                    imag: vec![1., 2.],
-                });
-                match record.clone().var_and_data_same_length() {
-                    Ok(r) => assert_eq!(r, record),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn fail_on_var_one_data_some() {
-                let mut record = Record::blank();
-                record.data.push(DataArray{
-                    name: None,
-                    format: None,
-                    real: vec![1., 2.],
-                    imag: vec![1., 2.],
-                });
-                record.header.independent_variable.data = vec![1.];
-                match record.var_and_data_same_length() {
-                    Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 0)) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn error_formatted_correctely() {
-                let mut record = Record::blank();
-                record.data.push(DataArray{
-                    name: None,
-                    format: None,
-                    real: vec![1.],
-                    imag: vec![1.],
-                });
-                record.data.push(DataArray{
-                    name: None,
-                    format: None,
-                    real: vec![1., 2.],
-                    imag: vec![1., 2.],
-                });
-                record.header.independent_variable.data = vec![1.];
-                match record.var_and_data_same_length() {
-                    Err(ValidRecordError::VarAndDataDifferentLengths(1, 2, 1)) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-        }
-
-        #[cfg(test)]
-        mod test_data_real_image_same_length {
-            use super::*;
-
-            #[test]
-            fn fail_on_different_double_array() {
-                let mut record = Record::blank();
-                record.data.push(DataArray{
-                    name: None,
-                    format: None,
-                    real: vec![],
-                    imag: vec![],
-                });
-                record.data.push(DataArray{
-                    name: None,
-                    format: None,
-                    real: vec![1., 2., 3.],
-                    imag: vec![1., 2.],
-                });
-                match record.data_real_image_same_length() {
-                    Err(ValidRecordError::RealImagDoNotMatch(3, 2, 1)) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn fail_on_different() {
-                let mut record = Record::blank();
-                record.data.push(DataArray{
-                    name: None,
-                    format: None,
-                    real: vec![1., 2., 3.],
-                    imag: vec![1., 2.],
-                });
-                match record.data_real_image_same_length() {
-                    Err(ValidRecordError::RealImagDoNotMatch(3, 2, 0)) => (),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn pass_on_empty() {
-                let record = Record::blank();
-                match record.clone().data_real_image_same_length() {
-                    Ok(r) => assert_eq!(r, record),
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn pass_on_equal() {
-                let mut record = Record::blank();
-                record.data.push(DataArray{
-                    name: None,
-                    format: None,
-                    real: vec![1., 2.],
-                    imag: vec![1., 2.],
-                });
-                match record.clone().data_real_image_same_length() {
-                    Ok(r) => assert_eq!(r, record),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2908,11 +2332,11 @@ mod test_record {
     fn test_default() {
         let expected = Record {
             header: Header {
-                version: Some(String::from("A.01.00")),
-                name: Some(String::from("Name")),
+                version: String::from("A.01.00"),
+                name: String::new(),
                 comments: vec![],
                 devices: vec![],
-                independent_variable: Var {name: None, format: None, data: vec![]},
+                independent_variable: Var {name: String::new(), format: String::new(), data: vec![]},
                 constants: vec![],
             },
             data: vec![],
@@ -2925,11 +2349,11 @@ mod test_record {
     fn test_new() {
         let expected = Record {
             header: Header {
-                version: Some(String::from("A.01.01")),
-                name: Some(String::from("A_NAME")),
+                version: String::from("A.01.01"),
+                name: String::from("A_NAME"),
                 comments: vec![],
                 devices: vec![],
-                independent_variable: Var {name: None, format: None, data: vec![]},
+                independent_variable: Var {name: String::new(), format: String::new(), data: vec![]},
                 constants: vec![],
             },
             data: vec![],
@@ -2942,11 +2366,11 @@ mod test_record {
     fn test_blank() {
         let expected = Record {
             header: Header {
-                version: None,
-                name: None,
+                version: String::new(),
+                name: String::new(),
                 comments: vec![],
                 devices: vec![],
-                independent_variable: Var {name: None, format: None, data: vec![]},
+                independent_variable: Var {name: String::new(), format: String::new(), data: vec![]},
                 constants: vec![],
             },
             data: vec![],
@@ -2955,6 +2379,7 @@ mod test_record {
         assert_eq!(result, expected);
     }
 }
+
 
 #[derive(Error, Debug)]
 pub enum ReaderError {
@@ -2972,6 +2397,16 @@ pub enum ReaderError {
     LineError(usize, ParseError),
     #[error("Reading error occured: {0}")]
     ReadingError(std::io::Error),
+    #[error("Version is not defined")]
+    NoVersion,
+    #[error("Name is not defined")]
+    NoName,
+    #[error("Indepent variable is not defined")]
+    NoIndependentVariable,
+    #[error("Data name and format is not defined")]
+    NoData,
+    #[error("Independent variable and data array {2} are different lengths ({0} != {1})")]
+    VarAndDataDifferentLengths(usize, usize, usize),
 }
 type ReaderResult<T> = std::result::Result<T, ReaderError>;
 
@@ -3023,6 +2458,36 @@ mod test_reader_error {
             let error = ReaderError::LineError(10, ParseError::BadRegex);
             assert_eq!(format!("{}", error), "Error on line 10: Regex could not be parsed");
         }
+
+        #[test]
+        fn no_version() {
+            let error = ReaderError::NoVersion;
+            assert_eq!(format!("{}", error), "Version is not defined");
+        }
+
+        #[test]
+        fn no_name() {
+            let error = ReaderError::NoName;
+            assert_eq!(format!("{}", error), "Name is not defined");
+        }
+
+        #[test]
+        fn no_independent_variable() {
+            let error = ReaderError::NoIndependentVariable;
+            assert_eq!(format!("{}", error), "Indepent variable is not defined");
+        }
+
+        #[test]
+        fn no_data() {
+            let error = ReaderError::NoData;
+            assert_eq!(format!("{}", error), "Data name and format is not defined");
+        }
+
+        #[test]
+        fn var_and_data() {
+            let error = ReaderError::VarAndDataDifferentLengths(1, 2, 3);
+            assert_eq!(format!("{}", error), "Independent variable and data array 3 are different lengths (1 != 2)");
+        }
     }
 }
 
@@ -3036,12 +2501,15 @@ enum RecordReaderStates {
 }
 
 /// Represents state in a CITI record reader FSM
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct RecordReaderState {
     record: Record,
     state: RecordReaderStates,
     data_array_counter: usize,
     independent_variable_already_read: bool,
+    version_aready_read: bool,
+    name_already_read: bool,
+    var_already_read: bool,
 }
 
 impl RecordReaderState {
@@ -3054,6 +2522,9 @@ impl RecordReaderState {
             state: RecordReaderStates::Header,
             data_array_counter: 0,
             independent_variable_already_read: false,
+            version_aready_read: false,
+            name_already_read: false,
+            var_already_read: false,
         }
     }
 
@@ -3069,19 +2540,21 @@ impl RecordReaderState {
     fn state_header(mut self, keyword: Keywords) -> ReaderResult<Self> {
         match keyword {
             Keywords::CITIFile{version} => {
-                match self.record.header.version {
-                    Some(_) => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})),
-                    None => {
-                        self.record.header.version = Some(version);
+                match self.version_aready_read {
+                    true => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})),
+                    false => {
+                        self.version_aready_read = true;
+                        self.record.header.version = version;
                         Ok(self)
-                    }
+                    },
                 }
             },
             Keywords::Name(name) => {
-                match self.record.header.name {
-                    Some(_) => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(name))),
-                    None => {
-                        self.record.header.name = Some(name);
+                match self.name_already_read {
+                    true => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(name))),
+                    false => {
+                        self.name_already_read = true;
+                        self.record.header.name = name;
                         Ok(self)
                     }
                 }
@@ -3099,13 +2572,14 @@ impl RecordReaderState {
                 Ok(self)
             },
             Keywords::Var{name, format, length} => {
-                match self.record.header.independent_variable.name {
-                    Some(_) => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})),
-                    None => {
-                        self.record.header.independent_variable.name = Some(name);
+                match self.var_already_read {
+                    true => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})),
+                    false => {
+                        self.var_already_read = true;
+                        self.record.header.independent_variable.name = name;
                         self.record.header.independent_variable.format = format;
                         Ok(self)
-                    },
+                    }
                 }
             },
             Keywords::VarListBegin => {
@@ -3186,6 +2660,59 @@ impl RecordReaderState {
             _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
         }
     }
+
+    pub fn validate_record(self) -> ReaderResult<Self> {
+        self.has_name()?
+            .has_version()?
+            .has_var()?
+            .has_data()?
+            .var_and_data_same_length()
+    }
+
+    fn has_version(self) -> ReaderResult<Self> {
+        match self.version_aready_read {
+            true => Ok(self),
+            false => Err(ReaderError::NoVersion),
+        }
+    }
+
+    fn has_name(self) -> ReaderResult<Self> {
+        match self.name_already_read {
+            true => Ok(self),
+            false => Err(ReaderError::NoName),
+        }
+    }
+
+    fn has_var(self) -> ReaderResult<Self> {
+        match self.var_already_read {
+            true => Ok(self),
+            false => Err(ReaderError::NoIndependentVariable),
+        }
+    }
+
+    fn has_data(self) -> ReaderResult<Self> {
+        match self.record.data.len() {
+            0 => Err(ReaderError::NoData),
+            _ => Ok(self),
+        }
+    }
+
+    /// Zero length var with variable length data allowed
+    fn var_and_data_same_length(self) -> ReaderResult<Self> {
+        let mut n = self.record.header.independent_variable.data.len();
+
+        for (i, data_array) in self.record.data.iter().enumerate() {
+            let k = data_array.samples.len();
+            if n == 0 {
+                n = k
+            } else {
+                if n != k {
+                    return Err(ReaderError::VarAndDataDifferentLengths(n, k, i))
+                }
+            }
+        }
+        Ok(self)
+    }
 }
 
 #[cfg(test)]
@@ -3198,11 +2725,11 @@ mod test_record_reader_state {
         let expected = RecordReaderState{
             record: Record {
                 header: Header {
-                    version: None,
-                    name: None,
+                    version: String::new(),
+                    name: String::new(),
                     comments: vec![],
                     devices: vec![],
-                    independent_variable: Var {name: None, format: None, data: vec![]},
+                    independent_variable: Var {name: String::new(), format: String::new(), data: vec![]},
                     constants: vec![],
                 },
                 data: vec![],
@@ -3210,6 +2737,9 @@ mod test_record_reader_state {
             state: RecordReaderStates::Header,
             data_array_counter: 0,
             independent_variable_already_read: false,
+            version_aready_read: false,
+            name_already_read: false,
+            var_already_read: false,
         };
         let result = RecordReaderState::new();
         assert_eq!(result, expected);
@@ -3234,8 +2764,9 @@ mod test_record_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.record.header.version, Some(String::from("A.01.01")));
+                        assert_eq!(s.record.header.version, "A.01.01");
                         assert_eq!(s.state, RecordReaderStates::Header);
+                        assert_eq!(s.version_aready_read, true);
                     },
                     Err(e) => panic!("{:?}", e),
                 }
@@ -3245,7 +2776,7 @@ mod test_record_reader_state {
             fn citirecord_cannot_be_called_twice() {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let mut state = initialize_state();
-                state.record.header.version = Some(String::from("A.01.01"));
+                state.version_aready_read = true;
                 match state.process_keyword(keyword) {
                     Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
@@ -3258,8 +2789,9 @@ mod test_record_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.record.header.name, Some(String::from("Name")));
+                        assert_eq!(s.record.header.name, "Name");
                         assert_eq!(s.state, RecordReaderStates::Header);
+                        assert_eq!(s.name_already_read, true);
                     },
                     Err(e) => panic!("{:?}", e),
                 }
@@ -3269,7 +2801,7 @@ mod test_record_reader_state {
             fn name_cannot_be_called_twice() {
                 let keyword = Keywords::Name(String::from("CAL_SET"));
                 let mut state = initialize_state();
-                state.record.header.name = Some(String::from("CAL_SET"));
+                state.name_already_read = true;
                 match state.process_keyword(keyword) {
                     Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(name))) => assert_eq!(name, "CAL_SET"),
                     e => panic!("{:?}", e),
@@ -3277,28 +2809,15 @@ mod test_record_reader_state {
             }
 
             #[test]
-            fn var_none() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
+            fn var() {
+                let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.record.header.independent_variable.name, Some(String::from("Name")));
-                        assert_eq!(s.record.header.independent_variable.format, None);
+                        assert_eq!(s.record.header.independent_variable.name, "Name");
+                        assert_eq!(s.record.header.independent_variable.format, "MAG");
                         assert_eq!(s.state, RecordReaderStates::Header);
-                    },
-                    Err(e) => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn var_some() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
-                let state = initialize_state();
-                match state.process_keyword(keyword) {
-                    Ok(s) => {
-                        assert_eq!(s.record.header.independent_variable.name, Some(String::from("Name")));
-                        assert_eq!(s.record.header.independent_variable.format, Some(String::from("MAG")));
-                        assert_eq!(s.state, RecordReaderStates::Header);
+                        assert_eq!(s.var_already_read, true);
                     },
                     Err(e) => panic!("{:?}", e),
                 }
@@ -3306,28 +2825,13 @@ mod test_record_reader_state {
 
             #[test]
             fn var_cannot_be_called_twice() {
-                let keyword = Keywords::Var{name: String::from("FREQ"), format: None, length: 102};
+                let keyword = Keywords::Var{name: String::from("FREQ"), format: String::from("MAG"), length: 102};
                 let mut state = initialize_state();
-                state.record.header.independent_variable.name = Some(String::from("Name"));
+                state.var_already_read = true;
                 match state.process_keyword(keyword) {
                     Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})) => {
                         assert_eq!(name, "FREQ");
-                        assert_eq!(format, None);
-                        assert_eq!(length, 102);
-                    },
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn var_cannot_be_called_twice_none_format() {
-                let keyword = Keywords::Var{name: String::from("FREQ"), format: Some(String::from("MAG")), length: 102};
-                let mut state = initialize_state();
-                state.record.header.independent_variable.name = Some(String::from("Name"));
-                match state.process_keyword(keyword) {
-                    Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})) => {
-                        assert_eq!(name, "FREQ");
-                        assert_eq!(format, Some(String::from("MAG")));
+                        assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
                     },
                     e => panic!("{:?}", e),
@@ -3473,7 +2977,7 @@ mod test_record_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.record.data, vec![DataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}]);
+                        assert_eq!(s.record.data, vec![DataArray {name: String::from("S[1,1]"), format: String::from("RI"), samples: vec![]}]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
                     Err(e) => panic!("{:?}", e),
@@ -3484,12 +2988,12 @@ mod test_record_reader_state {
             fn data_with_already_existing() {
                 let keyword = Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
                 let mut state = initialize_state();
-                state.record.data.push(DataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]});
+                state.record.data.push(DataArray {name: String::from("E"), format: String::from("RI"), samples: vec![]});
                 match state.process_keyword(keyword) {
                     Ok(s) => {
                         assert_eq!(s.record.data, vec![
-                            DataArray {name: Some(String::from("E")), format: Some(String::from("RI")), real: vec![], imag: vec![]},
-                            DataArray {name: Some(String::from("S[1,1]")), format: Some(String::from("RI")), real: vec![], imag: vec![]}
+                            DataArray {name: String::from("E"), format: String::from("RI"), samples: vec![]},
+                            DataArray {name: String::from("S[1,1]"), format: String::from("RI"), samples: vec![]}
                         ]);
                         assert_eq!(s.state, RecordReaderStates::Header);
                     },
@@ -3598,27 +3102,13 @@ mod test_record_reader_state {
             }
 
             #[test]
-            fn var_none() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
+            fn var() {
+                let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
                         assert_eq!(name, "Name");
-                        assert_eq!(format, None);
-                        assert_eq!(length, 102);
-                    },
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn var_some() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
-                let state = initialize_state();
-                match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
-                        assert_eq!(name, "Name");
-                        assert_eq!(format, Some(String::from("MAG")));
+                        assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
                     },
                     e => panic!("{:?}", e),
@@ -3744,8 +3234,8 @@ mod test_record_reader_state {
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.record.data[0].real, vec![1.]);
-                        assert_eq!(s.record.data[0].imag, vec![2.]);
+                        assert_eq!(s.record.data.len(), 1);
+                        assert_complex_array_relative_eq!(s.record.data[0].samples, vec![Complex{re: 1., im: 2.}]);
                         assert_eq!(s.state, RecordReaderStates::Data);
                     },
                     Err(e) => panic!("{:?}", e),
@@ -3760,10 +3250,9 @@ mod test_record_reader_state {
                 state.data_array_counter = 1;
                 match state.process_keyword(keyword) {
                     Ok(s) => {
-                        assert_eq!(s.record.data[0].real, vec![]);
-                        assert_eq!(s.record.data[0].imag, vec![]);
-                        assert_eq!(s.record.data[1].real, vec![1.]);
-                        assert_eq!(s.record.data[1].imag, vec![2.]);
+                        assert_eq!(s.record.data.len(), 2);
+                        assert_eq!(s.record.data[0].samples, vec![]);
+                        assert_complex_array_relative_eq!(s.record.data[1].samples, vec![Complex{re: 1., im: 2.}]);
                         assert_eq!(s.state, RecordReaderStates::Data);
                     },
                     Err(e) => panic!("{:?}", e),
@@ -3864,27 +3353,13 @@ mod test_record_reader_state {
             }
 
             #[test]
-            fn var_none() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
+            fn var() {
+                let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
                         assert_eq!(name, "Name");
-                        assert_eq!(format, None);
-                        assert_eq!(length, 102);
-                    },
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn var_some() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
-                let state = initialize_state();
-                match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
-                        assert_eq!(name, "Name");
-                        assert_eq!(format, Some(String::from("MAG")));
+                        assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
                     },
                     e => panic!("{:?}", e),
@@ -4106,27 +3581,13 @@ mod test_record_reader_state {
             }
 
             #[test]
-            fn var_none() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: None, length: 102};
+            fn var() {
+                let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
                         assert_eq!(name, "Name");
-                        assert_eq!(format, None);
-                        assert_eq!(length, 102);
-                    },
-                    e => panic!("{:?}", e),
-                }
-            }
-
-            #[test]
-            fn var_some() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: Some(String::from("MAG")), length: 102};
-                let state = initialize_state();
-                match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
-                        assert_eq!(name, "Name");
-                        assert_eq!(format, Some(String::from("MAG")));
+                        assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
                     },
                     e => panic!("{:?}", e),
@@ -4294,5 +3755,286 @@ mod test_record_reader_state {
                 }
             }
         }   
+    }
+
+    #[cfg(test)]
+    mod test_validate_record {
+        use super::*;
+
+        fn create_valid_record() -> Record {
+            let mut record = Record::blank();
+            record.header.name = String::from("CAL_SET");
+            record.header.version = String::from("A.01.00");
+            record.data.push(DataArray::new("E", "RI"));
+            record.header.independent_variable.name = String::from("FREQ");
+            record
+        }
+
+        fn create_valid_state() -> RecordReaderState {
+            let mut state = RecordReaderState::new();
+            state.record = create_valid_record();
+            state.independent_variable_already_read = true;
+            state.version_aready_read = true;
+            state.name_already_read = true;
+            state.var_already_read = true;
+            state
+        }
+
+        #[test]
+        fn test_valid_record() {
+            let state = create_valid_state();
+            match state.validate_record() {
+                Ok(s) => assert_eq!(s.record, create_valid_record()),
+                e => panic!("{:?}", e),
+            }
+        }
+
+        #[test]
+        fn test_no_data() {
+            let mut state = create_valid_state();
+            state.record.data = vec![];
+            match state.validate_record() {
+                Err(ReaderError::NoData) => (),
+                e => panic!("{:?}", e),
+            }
+        }
+
+        #[test]
+        fn test_no_version() {
+            let mut state = create_valid_state();
+            state.version_aready_read = false;
+            match state.validate_record() {
+                Err(ReaderError::NoVersion) => (),
+                e => panic!("{:?}", e),
+            }
+        }
+
+        #[test]
+        fn test_no_name() {
+            let mut state = create_valid_state();
+            state.name_already_read = false;
+            match state.validate_record() {
+                Err(ReaderError::NoName) => (),
+                e => panic!("{:?}", e),
+            }
+        }
+
+        #[test]
+        fn test_no_var() {
+            let mut state = create_valid_state();
+            state.var_already_read = false;
+            match state.validate_record() {
+                Err(ReaderError::NoIndependentVariable) => (),
+                e => panic!("{:?}", e),
+            }
+        }
+
+        #[test]
+        fn test_var_and_data_different() {
+            let mut state = create_valid_state();
+            state.record.data.push(DataArray{
+                name: String::new(),
+                format: String::new(),
+                samples: vec![Complex{re: 1., im: 1.}, Complex{re: 1., im: 1.}],
+            });
+            state.record.header.independent_variable.data = vec![1.];
+            match state.validate_record() {
+                Err(ReaderError::VarAndDataDifferentLengths(1, 0, 0)) => (),
+                e => panic!("{:?}", e),
+            }
+        }
+
+        #[cfg(test)]
+        mod test_has_data {
+            use super::*;
+
+            #[test]
+            fn fail_on_no_dadta() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                match state.has_data() {
+                    Err(ReaderError::NoData) => (),
+                    e => panic!("{:?}", e),
+                }
+            }
+
+            #[test]
+            fn pass_on_data() {
+                let mut state = RecordReaderState::new();
+                state.record.data.push(DataArray::new("E", "RI"));
+                let mut expected = Record::blank();
+                expected.data.push(DataArray::new("E", "RI"));
+                
+                match state.has_data() {
+                    Ok(s) => assert_eq!(s.record, expected),
+                    e => panic!("{:?}", e),
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod test_has_var {
+            use super::*;
+
+            #[test]
+            fn fail_on_no_var() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.var_already_read = false;
+                match state.has_var() {
+                    Err(ReaderError::NoIndependentVariable) => (),
+                    e => panic!("{:?}", e),
+                }
+            }
+
+            #[test]
+            fn pass_on_var() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.var_already_read = true;
+                match state.has_var() {
+                    Ok(s) => assert_eq!(s.record, Record::blank()),
+                    e => panic!("{:?}", e),
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod test_has_version {
+            use super::*;
+
+            #[test]
+            fn fail_on_no_version() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.version_aready_read = false;
+                match state.has_version() {
+                    Err(ReaderError::NoVersion) => (),
+                    e => panic!("{:?}", e),
+                }
+            }
+
+            #[test]
+            fn pass_on_name() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.version_aready_read = true;
+                match state.has_version() {
+                    Ok(s) => assert_eq!(s.record, Record::blank()),
+                    e => panic!("{:?}", e),
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod test_has_name {
+            use super::*;
+
+            #[test]
+            fn fail_on_no_name() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.name_already_read = false;
+                match state.has_name() {
+                    Err(ReaderError::NoName) => (),
+                    e => panic!("{:?}", e),
+                }
+            }
+
+            #[test]
+            fn pass_on_name() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.name_already_read = true;
+                match state.has_name() {
+                    Ok(s) => assert_eq!(s.record, Record::blank()),
+                    e => panic!("{:?}", e),
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod test_var_data_different_lengths {
+            use super::*;
+
+            #[test]
+            fn pass_on_blank() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                match state.var_and_data_same_length() {
+                    Ok(s) => assert_eq!(s.record, Record::blank()),
+                    e => panic!("{:?}", e),
+                }
+            }
+
+            #[test]
+            fn pass_on_equal() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.record.data.push(DataArray{
+                    name: String::new(),
+                    format: String::new(),
+                    samples: vec![Complex{re: 1., im: 1.}],
+                });
+                state.record.header.independent_variable.data = vec![1.];
+                match state.clone().var_and_data_same_length() {
+                    Ok(s) => assert_eq!(s.record, state.record),
+                    e => panic!("{:?}", e),
+                }
+            }
+
+            #[test]
+            fn pass_on_var_zero_data_some() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.record.data.push(DataArray{
+                    name: String::new(),
+                    format: String::new(),
+                    samples: vec![Complex{re: 1., im: 1.}],
+                });
+                state.record.header.independent_variable.data = vec![];
+                match state.clone().var_and_data_same_length() {
+                    Ok(s) => assert_eq!(s.record, state.record),
+                    e => panic!("{:?}", e),
+                }
+            }
+
+            #[test]
+            fn fail_on_var_one_data_some() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.record.data.push(DataArray{
+                    name: String::new(),
+                    format: String::new(),
+                    samples: vec![Complex{re: 1., im: 1.}, Complex{re: 1., im: 1.}],
+                });
+                state.record.header.independent_variable.data = vec![1.];
+                match state.var_and_data_same_length() {
+                    Err(ReaderError::VarAndDataDifferentLengths(1, 2, 0)) => (),
+                    e => panic!("{:?}", e),
+                }
+            }
+
+            #[test]
+            fn error_formatted_correctely() {
+                let mut state = RecordReaderState::new();
+                state.record = Record::blank();
+                state.record.data.push(DataArray{
+                    name: String::new(),
+                    format: String::new(),
+                    samples: vec![Complex{re: 1., im: 1.}],
+                });
+                state.record.data.push(DataArray{
+                    name: String::new(),
+                    format: String::new(),
+                    samples: vec![Complex{re: 1., im: 1.}, Complex{re: 1., im: 1.}],
+                });
+                state.record.header.independent_variable.data = vec![1.];
+                match state.var_and_data_same_length() {
+                    Err(ReaderError::VarAndDataDifferentLengths(1, 2, 1)) => (),
+                    e => panic!("{:?}", e),
+                }
+            }
+        }
     }
 }

@@ -2,12 +2,12 @@
 //! 
 //! <p><a href="http://literature.cdn.keysight.com/litweb/pdf/ads15/cktsim/ck2016.html#:~:text=CITIrecord%20stands%20for%20Common%20Instrumentation,it%20can%20meet%20future%20needs">The standard</a>, defines the following entities:</p>
 //! 
-//! | Name     | Description                     |
-//! |----------|---------------------------------|
+//! | Name     | Description                       |
+//! |----------|-----------------------------------|
 //! | Record   | The entire contents of the record |
 //! | Header   | Header of the record              |
-//! | Data     | One or more data arrays         |
-//! | Keywords | Define the header contents      |
+//! | Data     | One or more data arrays           |
+//! | Keywords | Define the header contents        |
 //! 
 //! As this is a custom ASCII record type, the standard is not as simple as one would like.
 //! The standard is followed as closely as is reasonable. The largest changes are in the
@@ -1718,8 +1718,8 @@ impl Record {
     fn get_independent_variable_keywords(&self) -> WriteResult<Vec<Keywords>> {
         Ok(vec![Keywords::Var{
             name: self.header.independent_variable.name.clone(),
-                format: self.header.independent_variable.format.clone(),
-                length: self.header.independent_variable.data.len()
+            format: self.header.independent_variable.format.clone(),
+            length: self.header.independent_variable.data.len()
         }])
     }
 

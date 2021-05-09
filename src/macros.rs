@@ -1,3 +1,9 @@
+/// Relative assert on two arrays
+/// 
+/// Checks:
+/// 
+/// - Are lengths exactly equal?
+/// - Are paired values approximately equal?
 #[macro_export]
 macro_rules! assert_array_relative_eq {
     ($lhs:expr, $rhs:expr) => {
@@ -45,6 +51,12 @@ mod test_assert_array_relative_eq_macro {
     }
 }
 
+/// Relative assert on two arrays of complex numbers
+/// 
+/// Checks:
+/// 
+/// - Are lengths exactly equal?
+/// - Are paired values approximately equal in real and imag?
 #[macro_export]
 macro_rules! assert_complex_array_relative_eq {
     ($lhs:expr, $rhs:expr) => {

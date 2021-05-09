@@ -23,6 +23,13 @@
 //! 
 //! These are used to provide internal comments.
 //! 
+//! ## IO Example
+//! 
+//! ```.no_test
+//! let record = Record::read(&PathBuf::from("input.cti")).unwrap();
+//! record.write(&PathBuf::from("output.cti")).unwrap();
+//! ```
+//! 
 //! ## Input-Output consistency:
 //! 
 //! General input-output consistency cannot be guaranteed with CITI records because of their design.
@@ -47,8 +54,12 @@ use std::fs::File;
 
 use thiserror::Error;
 
-pub mod macros;
+mod macros;
 
+/// Crate error
+/// 
+/// This is the highest level error in this crate. No
+/// other errors need to be explicitly dealt with.
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Parsing error: `{0}`")]
@@ -58,6 +69,7 @@ pub enum Error {
     #[error("Error writing record: `{0}`")]
     WriteError(#[from] WriteError)
 }
+/// Crate interface result
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
@@ -115,6 +127,7 @@ mod test_error {
     }
 }
 
+/// Error from parsing a line
 #[derive(Error, Debug)]
 pub enum ParseError {
     #[error("Keyword `{0}` is not supported")]
@@ -165,6 +178,9 @@ mod test_parse_error {
     }
 }
 
+/// Representation of the per-line keywords
+/// 
+/// A vector of these keywords represents a file.
 #[derive(Debug, PartialEq)]
 pub enum Keywords {
     /// CITIFile version e.g. A.01.01
@@ -1040,6 +1056,12 @@ mod test_keywords {
     }
 }
 
+/// Device-specific value.
+/// 
+/// This should be used over constants to conform to the standard.
+/// ```.no_test
+/// #NA VERSION HP8510B.05.00
+/// ```
 #[derive(Debug, PartialEq, Clone)]
 pub struct Device {
     pub name: String,
@@ -1067,6 +1089,7 @@ mod test_device {
     }
 }
 
+/// The independent variable
 #[derive(Debug, PartialEq, Clone)]
 pub struct Var {
     pub name: String,
@@ -1193,6 +1216,7 @@ mod test_var {
     }
 }
 
+/// Define a constant in the file
 #[derive(Debug, PartialEq, Clone)]
 pub struct Constant {
     pub name: String,
@@ -1223,6 +1247,9 @@ mod test_constant {
     }
 }
 
+/// The file header
+/// 
+/// Note that the `DATA` keywords are not defined here.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Header {
     pub version: String,
@@ -1447,6 +1474,10 @@ mod test_header {
 
 }
 
+/// A named, formatted, data array
+/// 
+/// Consistency of the format with the variable `samples` is not
+/// guaranteed and should be enforced by users of this code.
 #[derive(Debug, PartialEq, Clone)]
 pub struct DataArray {
     pub name: String,
@@ -1523,6 +1554,7 @@ mod test_data_array {
     }
 }
 
+/// Representation of a file
 #[derive(Debug, PartialEq, Clone)]
 pub struct Record {
     pub header: Header,
@@ -1538,6 +1570,7 @@ impl Default for Record {
     }
 }
 
+/// Error during writing
 #[derive(Error, Debug)]
 pub enum WriteError {
     #[error("Version is not defined")]
@@ -2380,7 +2413,7 @@ mod test_record {
     }
 }
 
-
+/// Error during reading
 #[derive(Error, Debug)]
 pub enum ReaderError {
     #[error("More data arrays than defined in header")]

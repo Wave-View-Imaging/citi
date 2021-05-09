@@ -7,7 +7,7 @@
 //! | Record   | The entire contents of the record |
 //! | Header   | Header of the record              |
 //! | Data     | One or more data arrays           |
-//! | Keywords | Define the header contents        |
+//! | Keyword | Define the header contents        |
 //! 
 //! As this is a custom ASCII record type, the standard is not as simple as one would like.
 //! The standard is followed as closely as is reasonable. The largest changes are in the
@@ -182,7 +182,7 @@ mod test_parse_error {
 /// 
 /// A vector of these keywords represents a file.
 #[derive(Debug, PartialEq)]
-pub enum Keywords {
+pub enum Keyword {
     /// CITIFile version e.g. A.01.01
     CITIFile{version: String},
     /// Name. Single word with no spaces. e.g. CAL_SET
@@ -217,15 +217,15 @@ pub enum Keywords {
     Comment(String),
 }
 
-impl FromStr for Keywords {
+impl FromStr for Keyword {
     type Err = ParseError;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        Keywords::try_from(s)
+        Keyword::try_from(s)
     }
 }
 
-impl TryFrom<&str> for Keywords {
+impl TryFrom<&str> for Keyword {
     type Error = ParseError;
 
     fn try_from(line: &str) -> std::result::Result<Self, Self::Error> {
@@ -244,29 +244,29 @@ impl TryFrom<&str> for Keywords {
         }
 
         match line {
-            "SEG_LIST_BEGIN" => Ok(Keywords::SegListBegin),
-            "SEG_LIST_END" => Ok(Keywords::SegListEnd),
-            "VAR_LIST_BEGIN" => Ok(Keywords::VarListBegin),
-            "VAR_LIST_END" => Ok(Keywords::VarListEnd),
-            "BEGIN" => Ok(Keywords::Begin),
-            "END" => Ok(Keywords::End),
+            "SEG_LIST_BEGIN" => Ok(Keyword::SegListBegin),
+            "SEG_LIST_END" => Ok(Keyword::SegListEnd),
+            "VAR_LIST_BEGIN" => Ok(Keyword::VarListBegin),
+            "VAR_LIST_END" => Ok(Keyword::VarListEnd),
+            "BEGIN" => Ok(Keyword::Begin),
+            "END" => Ok(Keyword::End),
             _ if RE_DATA_PAIR.is_match(line) => {
                 let cap = RE_DATA_PAIR.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::DataPair{
+                Ok(Keyword::DataPair{
                     real: cap.name("Real").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
                     imag: cap.name("Imag").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
                 })
             },
             _ if RE_DEVICE.is_match(line) => {
                 let cap = RE_DEVICE.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::Device{
+                Ok(Keyword::Device{
                     name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                     value: String::from(cap.name("Value").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                 })
             },
             _ if RE_SEG_ITEM.is_match(line) => {
                 let cap = RE_SEG_ITEM.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::SegItem{
+                Ok(Keyword::SegItem{
                     first: cap.name("First").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
                     last: cap.name("Last").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
                     number: cap.name("Number").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<usize>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
@@ -274,20 +274,20 @@ impl TryFrom<&str> for Keywords {
             },
             _ if RE_VAR_ITEM.is_match(line) => {
                 let cap = RE_VAR_ITEM.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::VarListItem(
+                Ok(Keyword::VarListItem(
                     cap.name("Value").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<f64>().map_err(|_| ParseError::NumberParseError(String::from(line)))?
                 ))
             },
             _ if RE_DATA.is_match(line) => {
                 let cap = RE_DATA.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::Data{
+                Ok(Keyword::Data{
                     name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                     format: String::from(cap.name("Format").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                 })
             },
             _ if RE_VAR.is_match(line) => {
                 let cap = RE_VAR.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::Var{
+                Ok(Keyword::Var{
                     name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                     format: String::from(cap.name("Format").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                     length: cap.name("Length").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?.parse::<usize>().map_err(|_| ParseError::NumberParseError(String::from(line)))?,
@@ -295,21 +295,21 @@ impl TryFrom<&str> for Keywords {
             },
             _ if RE_COMMENT.is_match(line) => {
                 let cap = RE_COMMENT.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::Comment(String::from(cap.name("Comment").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)))
+                Ok(Keyword::Comment(String::from(cap.name("Comment").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)))
             },
             _ if RE_CITIFILE.is_match(line) => {
                 let cap = RE_CITIFILE.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::CITIFile{
+                Ok(Keyword::CITIFile{
                     version: String::from(cap.name("Version").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)
                 })
             },
             _ if RE_NAME.is_match(line) => {
                 let cap = RE_NAME.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::Name(String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)))
+                Ok(Keyword::Name(String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)))
             },
             _ if RE_CONSTANT.is_match(line) => {
                 let cap = RE_CONSTANT.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keywords::Constant{
+                Ok(Keyword::Constant{
                     name: String::from(cap.name("Name").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?),
                     value: String::from(cap.name("Value").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)
                 })
@@ -319,25 +319,25 @@ impl TryFrom<&str> for Keywords {
     }
 }
 
-impl fmt::Display for Keywords {
+impl fmt::Display for Keyword {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Keywords::CITIFile{version} => write!(f, "CITIFILE {}", version),
-            Keywords::Name(name) => write!(f, "NAME {}", name),
-            Keywords::Var{name, format, length} => write!(f, "VAR {} {} {}", name, format, length),
-            Keywords::Constant{name, value} => write!(f, "CONSTANT {} {}", name, value),
-            Keywords::Device{name, value} => write!(f, "#{} {}", name, value),
-            Keywords::SegListBegin => write!(f, "SEG_LIST_BEGIN"),
-            Keywords::SegItem{first, last, number} => write!(f, "SEG {} {} {}", first, last, number),
-            Keywords::SegListEnd => write!(f, "SEG_LIST_END"),
-            Keywords::VarListBegin => write!(f, "VAR_LIST_BEGIN"),
-            Keywords::VarListItem(n) => write!(f, "{}", n),
-            Keywords::VarListEnd => write!(f, "VAR_LIST_END"),
-            Keywords::Data{name, format} => write!(f, "DATA {} {}", name, format),
-            Keywords::DataPair{real, imag} => write!(f, "{:E},{:E}", real, imag),
-            Keywords::Begin => write!(f, "BEGIN"),
-            Keywords::End => write!(f, "END"),
-            Keywords::Comment(comment) => write!(f, "!{}", comment),
+            Keyword::CITIFile{version} => write!(f, "CITIFILE {}", version),
+            Keyword::Name(name) => write!(f, "NAME {}", name),
+            Keyword::Var{name, format, length} => write!(f, "VAR {} {} {}", name, format, length),
+            Keyword::Constant{name, value} => write!(f, "CONSTANT {} {}", name, value),
+            Keyword::Device{name, value} => write!(f, "#{} {}", name, value),
+            Keyword::SegListBegin => write!(f, "SEG_LIST_BEGIN"),
+            Keyword::SegItem{first, last, number} => write!(f, "SEG {} {} {}", first, last, number),
+            Keyword::SegListEnd => write!(f, "SEG_LIST_END"),
+            Keyword::VarListBegin => write!(f, "VAR_LIST_BEGIN"),
+            Keyword::VarListItem(n) => write!(f, "{}", n),
+            Keyword::VarListEnd => write!(f, "VAR_LIST_END"),
+            Keyword::Data{name, format} => write!(f, "DATA {} {}", name, format),
+            Keyword::DataPair{real, imag} => write!(f, "{:E},{:E}", real, imag),
+            Keyword::Begin => write!(f, "BEGIN"),
+            Keyword::End => write!(f, "END"),
+            Keyword::Comment(comment) => write!(f, "!{}", comment),
         }
     }
 }
@@ -352,127 +352,127 @@ mod test_keywords {
 
         #[test]
         fn citirecord_a_01_00() {
-            let keyword = Keywords::CITIFile{version: String::from("A.01.00")};
+            let keyword = Keyword::CITIFile{version: String::from("A.01.00")};
             assert_eq!("CITIFILE A.01.00", format!("{}", keyword));
         }
 
         #[test]
         fn citirecord_a_01_01() {
-            let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
+            let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
             assert_eq!("CITIFILE A.01.01", format!("{}", keyword));
         }
 
         #[test]
         fn name() {
-            let keyword = Keywords::Name(String::from("CAL_SET"));
+            let keyword = Keyword::Name(String::from("CAL_SET"));
             assert_eq!("NAME CAL_SET", format!("{}", keyword));
         }
 
         #[test]
         fn var() {
-            let keyword = Keywords::Var{name: String::from("FREQ"), format: String::from("MAG"), length: 201};
+            let keyword = Keyword::Var{name: String::from("FREQ"), format: String::from("MAG"), length: 201};
             assert_eq!("VAR FREQ MAG 201", format!("{}", keyword));
         }
 
         #[test]
         fn constant() {
-            let keyword = Keywords::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")};
+            let keyword = Keyword::Constant{name: String::from("A_CONSTANT"), value: String::from("1.2345")};
             assert_eq!("CONSTANT A_CONSTANT 1.2345", format!("{}", keyword));
         }
 
         #[test]
         fn device() {
-            let keyword = Keywords::Device{name: String::from("NA"), value: String::from("REGISTER 1")};
+            let keyword = Keyword::Device{name: String::from("NA"), value: String::from("REGISTER 1")};
             assert_eq!("#NA REGISTER 1", format!("{}", keyword));
         }
 
         #[test]
         fn device_number() {
-            let keyword = Keywords::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")};
+            let keyword = Keyword::Device{name: String::from("NA"), value: String::from("POWER2 1.0E1")};
             assert_eq!("#NA POWER2 1.0E1", format!("{}", keyword));
         }
 
         #[test]
         fn device_name() {
-            let keyword = Keywords::Device{name: String::from("WVI"), value: String::from("A B")};
+            let keyword = Keyword::Device{name: String::from("WVI"), value: String::from("A B")};
             assert_eq!("#WVI A B", format!("{}", keyword));
         }
 
         #[test]
         fn seg_list_begin() {
-            let keyword = Keywords::SegListBegin;
+            let keyword = Keyword::SegListBegin;
             assert_eq!("SEG_LIST_BEGIN", format!("{}", keyword));
         }
 
         #[test]
         fn seg_item() {
-            let keyword = Keywords::SegItem{first: 1000000000., last: 4000000000., number: 10};
+            let keyword = Keyword::SegItem{first: 1000000000., last: 4000000000., number: 10};
             assert_eq!("SEG 1000000000 4000000000 10", format!("{}", keyword));
         }
 
         #[test]
         fn seg_list_end() {
-            let keyword = Keywords::SegListEnd;
+            let keyword = Keyword::SegListEnd;
             assert_eq!("SEG_LIST_END", format!("{}", keyword));
         }
 
         #[test]
         fn var_list_begin() {
-            let keyword = Keywords::VarListBegin;
+            let keyword = Keyword::VarListBegin;
             assert_eq!("VAR_LIST_BEGIN", format!("{}", keyword));
         }
 
         #[test]
         fn var_item() {
-            let keyword = Keywords::VarListItem(100000.);
+            let keyword = Keyword::VarListItem(100000.);
             assert_eq!("100000", format!("{}", keyword));
         }
 
         #[test]
         fn var_list_end() {
-            let keyword = Keywords::VarListEnd;
+            let keyword = Keyword::VarListEnd;
             assert_eq!("VAR_LIST_END", format!("{}", keyword));
         }
 
         #[test]
         fn data_s11() {
-            let keyword = Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
+            let keyword = Keyword::Data{name: String::from("S[1,1]"), format: String::from("RI")};
             assert_eq!("DATA S[1,1] RI", format!("{}", keyword));
         }
 
         #[test]
         fn data_e() {
-            let keyword = Keywords::Data{name: String::from("E"), format: String::from("RI")};
+            let keyword = Keyword::Data{name: String::from("E"), format: String::from("RI")};
             assert_eq!("DATA E RI", format!("{}", keyword));
         }
 
         #[test]
         fn data_pair_simple() {
-            let keyword = Keywords::DataPair{real: 1e9, imag: -1e9};
+            let keyword = Keyword::DataPair{real: 1e9, imag: -1e9};
             assert_eq!("1E9,-1E9", format!("{}", keyword));
         }
         
         #[test]
         fn data_pair() {
-            let keyword = Keywords::DataPair{real: 0.86303e-1, imag: -8.98651e-1};
+            let keyword = Keyword::DataPair{real: 0.86303e-1, imag: -8.98651e-1};
             assert_eq!("8.6303E-2,-8.98651E-1", format!("{}", keyword));
         }
 
         #[test]
         fn begin() {
-            let keyword = Keywords::Begin;
+            let keyword = Keyword::Begin;
             assert_eq!("BEGIN", format!("{}", keyword));
         }
 
         #[test]
         fn end() {
-            let keyword = Keywords::End;
+            let keyword = Keyword::End;
             assert_eq!("END", format!("{}", keyword));
         }
 
         #[test]
         fn comment() {
-            let keyword = Keywords::Comment(String::from("DATE: 2019.11.01"));
+            let keyword = Keyword::Comment(String::from("DATE: 2019.11.01"));
             assert_eq!("!DATE: 2019.11.01", format!("{}", keyword));
         }
     }
@@ -484,7 +484,7 @@ mod test_keywords {
 
         #[test]
         fn fails_on_bad_string() {
-            match Keywords::from_str("this is a bad string") {
+            match Keyword::from_str("this is a bad string") {
                 Err(ParseError::BadKeyword(bad_string)) => assert_eq!(bad_string, "this is a bad string"),
                 e => panic!("{:?}", e),
             }
@@ -492,40 +492,40 @@ mod test_keywords {
 
         #[test]
         fn citirecord_a_01_00() {
-            match Keywords::from_str("CITIFILE A.01.00") {
-                Ok(Keywords::CITIFile{version}) => assert_eq!(version, "A.01.00"),
+            match Keyword::from_str("CITIFILE A.01.00") {
+                Ok(Keyword::CITIFile{version}) => assert_eq!(version, "A.01.00"),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn citirecord_a_01_01() {
-            match Keywords::from_str("CITIFILE A.01.01") {
-                Ok(Keywords::CITIFile{version}) => assert_eq!(version, "A.01.01"),
+            match Keyword::from_str("CITIFILE A.01.01") {
+                Ok(Keyword::CITIFile{version}) => assert_eq!(version, "A.01.01"),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn name_cal_set() {
-            match Keywords::from_str("NAME CAL_SET") {
-                Ok(Keywords::Name(name)) => assert_eq!(name, "CAL_SET"),
+            match Keyword::from_str("NAME CAL_SET") {
+                Ok(Keyword::Name(name)) => assert_eq!(name, "CAL_SET"),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn name_raw_data() {
-            match Keywords::from_str("NAME RAW_DATA") {
-                Ok(Keywords::Name(name)) => assert_eq!(name, "RAW_DATA"),
+            match Keyword::from_str("NAME RAW_DATA") {
+                Ok(Keyword::Name(name)) => assert_eq!(name, "RAW_DATA"),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn constant() {
-            match Keywords::from_str("CONSTANT A_CONSTANT 1.2345") {
-                Ok(Keywords::Constant{name, value}) => {
+            match Keyword::from_str("CONSTANT A_CONSTANT 1.2345") {
+                Ok(Keyword::Constant{name, value}) => {
                     assert_eq!(name, "A_CONSTANT");
                     assert_eq!(value, "1.2345");
                 },
@@ -535,8 +535,8 @@ mod test_keywords {
 
         #[test]
         fn device() {
-            match Keywords::from_str("#NA REGISTER 1") {
-                Ok(Keywords::Device{name, value}) => {
+            match Keyword::from_str("#NA REGISTER 1") {
+                Ok(Keyword::Device{name, value}) => {
                     assert_eq!(name, "NA");
                     assert_eq!(value, "REGISTER 1");
                 },
@@ -546,8 +546,8 @@ mod test_keywords {
 
         #[test]
         fn device_number() {
-            match Keywords::from_str("#NA POWER2 1.0E1") {
-                Ok(Keywords::Device{name, value}) => {
+            match Keyword::from_str("#NA POWER2 1.0E1") {
+                Ok(Keyword::Device{name, value}) => {
                     assert_eq!(name, "NA");
                     assert_eq!(value, "POWER2 1.0E1");
                 },
@@ -557,8 +557,8 @@ mod test_keywords {
 
         #[test]
         fn device_name() {
-            match Keywords::from_str("#WVI A B") {
-                Ok(Keywords::Device{name, value}) => {
+            match Keyword::from_str("#WVI A B") {
+                Ok(Keyword::Device{name, value}) => {
                     assert_eq!(name, "WVI");
                     assert_eq!(value, "A B");
                 },
@@ -568,8 +568,8 @@ mod test_keywords {
 
         #[test]
         fn var() {
-            match Keywords::from_str("VAR FREQ MAG 201") {
-                Ok(Keywords::Var{name, format, length}) => {
+            match Keyword::from_str("VAR FREQ MAG 201") {
+                Ok(Keyword::Var{name, format, length}) => {
                     assert_eq!(name, "FREQ");
                     assert_eq!(format, "MAG");
                     assert_eq!(length, 201);
@@ -580,16 +580,16 @@ mod test_keywords {
 
         #[test]
         fn seg_list_begin() {
-            match Keywords::from_str("SEG_LIST_BEGIN") {
-                Ok(Keywords::SegListBegin) => (),
+            match Keyword::from_str("SEG_LIST_BEGIN") {
+                Ok(Keyword::SegListBegin) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn seg_item() {
-            match Keywords::from_str("SEG 1000000000 4000000000 10") {
-                Ok(Keywords::SegItem{first, last, number}) => {
+            match Keyword::from_str("SEG 1000000000 4000000000 10") {
+                Ok(Keyword::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1000000000.);
                     assert_relative_eq!(last, 4000000000.);
                     assert_eq!(number, 10);
@@ -600,8 +600,8 @@ mod test_keywords {
 
         #[test]
         fn seg_item_exponential() {
-            match Keywords::from_str("SEG 1e9 1E4 100") {
-                Ok(Keywords::SegItem{first, last, number}) => {
+            match Keyword::from_str("SEG 1e9 1E4 100") {
+                Ok(Keyword::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1e9);
                     assert_relative_eq!(last, 1e4);
                     assert_eq!(number, 100);
@@ -612,8 +612,8 @@ mod test_keywords {
 
         #[test]
         fn seg_item_negative() {
-            match Keywords::from_str("SEG -1e9 1E-4 1") {
-                Ok(Keywords::SegItem{first, last, number}) => {
+            match Keyword::from_str("SEG -1e9 1E-4 1") {
+                Ok(Keyword::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, -1e9);
                     assert_relative_eq!(last, 1e-4);
                     assert_eq!(number, 1);
@@ -624,24 +624,24 @@ mod test_keywords {
 
         #[test]
         fn seg_list_end() {
-            match Keywords::from_str("SEG_LIST_END") {
-                Ok(Keywords::SegListEnd) => (),
+            match Keyword::from_str("SEG_LIST_END") {
+                Ok(Keyword::SegListEnd) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_list_begin() {
-            match Keywords::from_str("VAR_LIST_BEGIN") {
-                Ok(Keywords::VarListBegin) => (),
+            match Keyword::from_str("VAR_LIST_BEGIN") {
+                Ok(Keyword::VarListBegin) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_item() {
-            match Keywords::from_str("100000") {
-                Ok(Keywords::VarListItem(value)) => {
+            match Keyword::from_str("100000") {
+                Ok(Keyword::VarListItem(value)) => {
                     assert_relative_eq!(value, 100000.);
                 },
                 e => panic!("{:?}", e),
@@ -650,8 +650,8 @@ mod test_keywords {
 
         #[test]
         fn var_item_exponential() {
-            match Keywords::from_str("100E+6") {
-                Ok(Keywords::VarListItem(value)) => {
+            match Keyword::from_str("100E+6") {
+                Ok(Keyword::VarListItem(value)) => {
                     assert_relative_eq!(value, 100E+6);
                 },
                 e => panic!("{:?}", e),
@@ -660,8 +660,8 @@ mod test_keywords {
 
         #[test]
         fn var_item_negative_exponential() {
-            match Keywords::from_str("-1e-2") {
-                Ok(Keywords::VarListItem(value)) => {
+            match Keyword::from_str("-1e-2") {
+                Ok(Keyword::VarListItem(value)) => {
                     assert_relative_eq!(value, -1e-2);
                 },
                 e => panic!("{:?}", e),
@@ -670,8 +670,8 @@ mod test_keywords {
 
         #[test]
         fn var_item_negative() {
-            match Keywords::from_str("-100000") {
-                Ok(Keywords::VarListItem(value)) => {
+            match Keyword::from_str("-100000") {
+                Ok(Keyword::VarListItem(value)) => {
                     assert_relative_eq!(value, -100000.);
                 },
                 e => panic!("{:?}", e),
@@ -680,16 +680,16 @@ mod test_keywords {
 
         #[test]
         fn var_list_end() {
-            match Keywords::from_str("VAR_LIST_END") {
-                Ok(Keywords::VarListEnd) => (),
+            match Keyword::from_str("VAR_LIST_END") {
+                Ok(Keyword::VarListEnd) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn data_s11() {
-            match Keywords::from_str("DATA S[1,1] RI") {
-                Ok(Keywords::Data{name, format}) => {
+            match Keyword::from_str("DATA S[1,1] RI") {
+                Ok(Keyword::Data{name, format}) => {
                     assert_eq!(name, "S[1,1]");
                     assert_eq!(format, "RI");
                 },
@@ -699,8 +699,8 @@ mod test_keywords {
 
         #[test]
         fn data_e() {
-            match Keywords::from_str("DATA E RI") {
-                Ok(Keywords::Data{name, format}) => {
+            match Keyword::from_str("DATA E RI") {
+                Ok(Keyword::Data{name, format}) => {
                     assert_eq!(name, "E");
                     assert_eq!(format, "RI");
                 },
@@ -710,8 +710,8 @@ mod test_keywords {
 
         #[test]
         fn data_pair_simple() {
-            match Keywords::from_str("1E9,-1E9") {
-                Ok(Keywords::DataPair{real, imag}) => {
+            match Keyword::from_str("1E9,-1E9") {
+                Ok(Keyword::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 1e9);
                     assert_relative_eq!(imag, -1e9);
                 },
@@ -721,8 +721,8 @@ mod test_keywords {
 
         #[test]
         fn data_pair() {
-            match Keywords::from_str("8.6303E-2,-8.98651E-1") {
-                Ok(Keywords::DataPair{real, imag}) => {
+            match Keyword::from_str("8.6303E-2,-8.98651E-1") {
+                Ok(Keyword::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
@@ -732,8 +732,8 @@ mod test_keywords {
 
         #[test]
         fn data_pair_spaced() {
-            match Keywords::from_str("8.6303E-2, -8.98651E-1") {
-                Ok(Keywords::DataPair{real, imag}) => {
+            match Keyword::from_str("8.6303E-2, -8.98651E-1") {
+                Ok(Keyword::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
@@ -743,24 +743,24 @@ mod test_keywords {
 
         #[test]
         fn begin() {
-            match Keywords::from_str("BEGIN") {
-                Ok(Keywords::Begin) => (),
+            match Keyword::from_str("BEGIN") {
+                Ok(Keyword::Begin) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn end() {
-            match Keywords::from_str("END") {
-                Ok(Keywords::End) => (),
+            match Keyword::from_str("END") {
+                Ok(Keyword::End) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn comment() {
-            match Keywords::from_str("!DATE: 2019.11.01") {
-                Ok(Keywords::Comment(s)) => assert_eq!(s, "DATE: 2019.11.01"),
+            match Keyword::from_str("!DATE: 2019.11.01") {
+                Ok(Keyword::Comment(s)) => assert_eq!(s, "DATE: 2019.11.01"),
                 e => panic!("{:?}", e),
             }
         }
@@ -773,7 +773,7 @@ mod test_keywords {
 
         #[test]
         fn fails_on_bad_string() {
-            match Keywords::try_from("this is a bad string") {
+            match Keyword::try_from("this is a bad string") {
                 Err(ParseError::BadKeyword(bad_string)) => assert_eq!(bad_string, "this is a bad string"),
                 e => panic!("{:?}", e),
             }
@@ -781,40 +781,40 @@ mod test_keywords {
 
         #[test]
         fn citirecord_a_01_00() {
-            match Keywords::try_from("CITIFILE A.01.00") {
-                Ok(Keywords::CITIFile{version}) => assert_eq!(version, "A.01.00"),
+            match Keyword::try_from("CITIFILE A.01.00") {
+                Ok(Keyword::CITIFile{version}) => assert_eq!(version, "A.01.00"),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn citirecord_a_01_01() {
-            match Keywords::try_from("CITIFILE A.01.01") {
-                Ok(Keywords::CITIFile{version}) => assert_eq!(version, "A.01.01"),
+            match Keyword::try_from("CITIFILE A.01.01") {
+                Ok(Keyword::CITIFile{version}) => assert_eq!(version, "A.01.01"),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn name_cal_set() {
-            match Keywords::try_from("NAME CAL_SET") {
-                Ok(Keywords::Name(name)) => assert_eq!(name, "CAL_SET"),
+            match Keyword::try_from("NAME CAL_SET") {
+                Ok(Keyword::Name(name)) => assert_eq!(name, "CAL_SET"),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn name_raw_data() {
-            match Keywords::try_from("NAME RAW_DATA") {
-                Ok(Keywords::Name(name)) => assert_eq!(name, "RAW_DATA"),
+            match Keyword::try_from("NAME RAW_DATA") {
+                Ok(Keyword::Name(name)) => assert_eq!(name, "RAW_DATA"),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn constant() {
-            match Keywords::try_from("CONSTANT A_CONSTANT 1.2345") {
-                Ok(Keywords::Constant{name, value}) => {
+            match Keyword::try_from("CONSTANT A_CONSTANT 1.2345") {
+                Ok(Keyword::Constant{name, value}) => {
                     assert_eq!(name, "A_CONSTANT");
                     assert_eq!(value, "1.2345");
                 },
@@ -824,8 +824,8 @@ mod test_keywords {
 
         #[test]
         fn device() {
-            match Keywords::try_from("#NA REGISTER 1") {
-                Ok(Keywords::Device{name, value}) => {
+            match Keyword::try_from("#NA REGISTER 1") {
+                Ok(Keyword::Device{name, value}) => {
                     assert_eq!(name, "NA");
                     assert_eq!(value, "REGISTER 1");
                 },
@@ -835,8 +835,8 @@ mod test_keywords {
 
         #[test]
         fn device_number() {
-            match Keywords::try_from("#NA POWER2 1.0E1") {
-                Ok(Keywords::Device{name, value}) => {
+            match Keyword::try_from("#NA POWER2 1.0E1") {
+                Ok(Keyword::Device{name, value}) => {
                     assert_eq!(name, "NA");
                     assert_eq!(value, "POWER2 1.0E1");
                 },
@@ -846,8 +846,8 @@ mod test_keywords {
 
         #[test]
         fn device_name() {
-            match Keywords::try_from("#WVI A B") {
-                Ok(Keywords::Device{name, value}) => {
+            match Keyword::try_from("#WVI A B") {
+                Ok(Keyword::Device{name, value}) => {
                     assert_eq!(name, "WVI");
                     assert_eq!(value, "A B");
                 },
@@ -857,8 +857,8 @@ mod test_keywords {
 
         #[test]
         fn var() {
-            match Keywords::try_from("VAR FREQ MAG 201") {
-                Ok(Keywords::Var{name, format, length}) => {
+            match Keyword::try_from("VAR FREQ MAG 201") {
+                Ok(Keyword::Var{name, format, length}) => {
                     assert_eq!(name, "FREQ");
                     assert_eq!(format, "MAG");
                     assert_eq!(length, 201);
@@ -869,16 +869,16 @@ mod test_keywords {
 
         #[test]
         fn seg_list_begin() {
-            match Keywords::try_from("SEG_LIST_BEGIN") {
-                Ok(Keywords::SegListBegin) => (),
+            match Keyword::try_from("SEG_LIST_BEGIN") {
+                Ok(Keyword::SegListBegin) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn seg_item() {
-            match Keywords::try_from("SEG 1000000000 4000000000 10") {
-                Ok(Keywords::SegItem{first, last, number}) => {
+            match Keyword::try_from("SEG 1000000000 4000000000 10") {
+                Ok(Keyword::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1000000000.);
                     assert_relative_eq!(last, 4000000000.);
                     assert_eq!(number, 10);
@@ -889,8 +889,8 @@ mod test_keywords {
 
         #[test]
         fn seg_item_exponential() {
-            match Keywords::try_from("SEG 1e9 1E4 100") {
-                Ok(Keywords::SegItem{first, last, number}) => {
+            match Keyword::try_from("SEG 1e9 1E4 100") {
+                Ok(Keyword::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, 1e9);
                     assert_relative_eq!(last, 1e4);
                     assert_eq!(number, 100);
@@ -901,8 +901,8 @@ mod test_keywords {
 
         #[test]
         fn seg_item_negative() {
-            match Keywords::try_from("SEG -1e9 1E-4 1") {
-                Ok(Keywords::SegItem{first, last, number}) => {
+            match Keyword::try_from("SEG -1e9 1E-4 1") {
+                Ok(Keyword::SegItem{first, last, number}) => {
                     assert_relative_eq!(first, -1e9);
                     assert_relative_eq!(last, 1e-4);
                     assert_eq!(number, 1);
@@ -913,24 +913,24 @@ mod test_keywords {
 
         #[test]
         fn seg_list_end() {
-            match Keywords::try_from("SEG_LIST_END") {
-                Ok(Keywords::SegListEnd) => (),
+            match Keyword::try_from("SEG_LIST_END") {
+                Ok(Keyword::SegListEnd) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_list_begin() {
-            match Keywords::try_from("VAR_LIST_BEGIN") {
-                Ok(Keywords::VarListBegin) => (),
+            match Keyword::try_from("VAR_LIST_BEGIN") {
+                Ok(Keyword::VarListBegin) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn var_item() {
-            match Keywords::try_from("100000") {
-                Ok(Keywords::VarListItem(value)) => {
+            match Keyword::try_from("100000") {
+                Ok(Keyword::VarListItem(value)) => {
                     assert_relative_eq!(value, 100000.);
                 },
                 e => panic!("{:?}", e),
@@ -939,8 +939,8 @@ mod test_keywords {
 
         #[test]
         fn var_item_exponential() {
-            match Keywords::try_from("100E+6") {
-                Ok(Keywords::VarListItem(value)) => {
+            match Keyword::try_from("100E+6") {
+                Ok(Keyword::VarListItem(value)) => {
                     assert_relative_eq!(value, 100E+6);
                 },
                 e => panic!("{:?}", e),
@@ -949,8 +949,8 @@ mod test_keywords {
 
         #[test]
         fn var_item_negative_exponential() {
-            match Keywords::try_from("-1e-2") {
-                Ok(Keywords::VarListItem(value)) => {
+            match Keyword::try_from("-1e-2") {
+                Ok(Keyword::VarListItem(value)) => {
                     assert_relative_eq!(value, -1e-2);
                 },
                 e => panic!("{:?}", e),
@@ -959,8 +959,8 @@ mod test_keywords {
 
         #[test]
         fn var_item_negative() {
-            match Keywords::try_from("-100000") {
-                Ok(Keywords::VarListItem(value)) => {
+            match Keyword::try_from("-100000") {
+                Ok(Keyword::VarListItem(value)) => {
                     assert_relative_eq!(value, -100000.);
                 },
                 e => panic!("{:?}", e),
@@ -969,16 +969,16 @@ mod test_keywords {
 
         #[test]
         fn var_list_end() {
-            match Keywords::try_from("VAR_LIST_END") {
-                Ok(Keywords::VarListEnd) => (),
+            match Keyword::try_from("VAR_LIST_END") {
+                Ok(Keyword::VarListEnd) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn data_s11() {
-            match Keywords::try_from("DATA S[1,1] RI") {
-                Ok(Keywords::Data{name, format}) => {
+            match Keyword::try_from("DATA S[1,1] RI") {
+                Ok(Keyword::Data{name, format}) => {
                     assert_eq!(name, "S[1,1]");
                     assert_eq!(format, "RI");
                 },
@@ -988,8 +988,8 @@ mod test_keywords {
 
         #[test]
         fn data_e() {
-            match Keywords::try_from("DATA E RI") {
-                Ok(Keywords::Data{name, format}) => {
+            match Keyword::try_from("DATA E RI") {
+                Ok(Keyword::Data{name, format}) => {
                     assert_eq!(name, "E");
                     assert_eq!(format, "RI");
                 },
@@ -999,8 +999,8 @@ mod test_keywords {
 
         #[test]
         fn data_pair_simple() {
-            match Keywords::try_from("1E9,-1E9") {
-                Ok(Keywords::DataPair{real, imag}) => {
+            match Keyword::try_from("1E9,-1E9") {
+                Ok(Keyword::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 1e9);
                     assert_relative_eq!(imag, -1e9);
                 },
@@ -1010,8 +1010,8 @@ mod test_keywords {
 
         #[test]
         fn data_pair() {
-            match Keywords::try_from("8.6303E-2,-8.98651E-1") {
-                Ok(Keywords::DataPair{real, imag}) => {
+            match Keyword::try_from("8.6303E-2,-8.98651E-1") {
+                Ok(Keyword::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
@@ -1021,8 +1021,8 @@ mod test_keywords {
 
         #[test]
         fn data_pair_spaced() {
-            match Keywords::try_from("8.6303E-2, -8.98651E-1") {
-                Ok(Keywords::DataPair{real, imag}) => {
+            match Keyword::try_from("8.6303E-2, -8.98651E-1") {
+                Ok(Keyword::DataPair{real, imag}) => {
                     assert_relative_eq!(real, 0.86303e-1);
                     assert_relative_eq!(imag, -8.98651e-1);
                 },
@@ -1032,24 +1032,24 @@ mod test_keywords {
 
         #[test]
         fn begin() {
-            match Keywords::try_from("BEGIN") {
-                Ok(Keywords::Begin) => (),
+            match Keyword::try_from("BEGIN") {
+                Ok(Keyword::Begin) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn end() {
-            match Keywords::try_from("END") {
-                Ok(Keywords::End) => (),
+            match Keyword::try_from("END") {
+                Ok(Keyword::End) => (),
                 e => panic!("{:?}", e),
             }
         }
 
         #[test]
         fn comment() {
-            match Keywords::try_from("!DATE: 2019.11.01") {
-                Ok(Keywords::Comment(s)) => assert_eq!(s, "DATE: 2019.11.01"),
+            match Keyword::try_from("!DATE: 2019.11.01") {
+                Ok(Keyword::Comment(s)) => assert_eq!(s, "DATE: 2019.11.01"),
                 e => panic!("{:?}", e),
             }
         }
@@ -1667,7 +1667,7 @@ impl Record {
             let this_line = line.map_err(|e| ReadError::ReadingError(e))?;
             // Filter out new lines
             if this_line.trim().len() > 0 {
-                let keyword = Keywords::from_str(&this_line).map_err(|e| ReadError::LineError(i, e))?;
+                let keyword = Keyword::from_str(&this_line).map_err(|e| ReadError::LineError(i, e))?;
                 state = state.process_keyword(keyword)?;
             }
         }
@@ -1689,94 +1689,94 @@ impl Record {
         Ok(())
     }
 
-    fn get_data_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        let mut keywords: Vec<Keywords> = vec![];
+    fn get_data_keywords(&self) -> WriteResult<Vec<Keyword>> {
+        let mut keywords: Vec<Keyword> = vec![];
 
         // Add each array
         for array in self.data.iter() {
-            keywords.push(Keywords::Begin);
+            keywords.push(Keyword::Begin);
 
             for Complex{re: real, im: imag} in array.samples.iter() {
-                keywords.push(Keywords::DataPair{real: *real, imag: *imag});
+                keywords.push(Keyword::DataPair{real: *real, imag: *imag});
             }
-            keywords.push(Keywords::End);
+            keywords.push(Keyword::End);
         }
 
         Ok(keywords)
     }
 
-    fn get_data_defines_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        let mut keywords: Vec<Keywords> = vec![];
+    fn get_data_defines_keywords(&self) -> WriteResult<Vec<Keyword>> {
+        let mut keywords: Vec<Keyword> = vec![];
 
         for (i, array) in self.data.iter().enumerate() {
             match (array.name.len() > 0, array.format.len() > 0) {
                 (false, _) => return Err(WriteError::NoDataName(i)),
                 (_, false) => return Err(WriteError::NoDataFormat(i)),
-                (_, _) => keywords.push(Keywords::Data{name: array.name.clone(), format: array.format.clone()}),
+                (_, _) => keywords.push(Keyword::Data{name: array.name.clone(), format: array.format.clone()}),
             }
         }
         Ok(keywords)
     }
 
-    fn get_version_keywords(&self) -> WriteResult<Vec<Keywords>> {
+    fn get_version_keywords(&self) -> WriteResult<Vec<Keyword>> {
         match self.header.version.len() > 0 {
-            true => Ok(vec![Keywords::CITIFile{version: self.header.version.clone()}]),
+            true => Ok(vec![Keyword::CITIFile{version: self.header.version.clone()}]),
             false => Err(WriteError::NoVersion),
         }
     }
 
-    fn get_name_keywords(&self) -> WriteResult<Vec<Keywords>> {
+    fn get_name_keywords(&self) -> WriteResult<Vec<Keyword>> {
         match self.header.name.len() > 0 {
-            true => Ok(vec![Keywords::Name(self.header.name.clone())]),
+            true => Ok(vec![Keyword::Name(self.header.name.clone())]),
             false => Err(WriteError::NoName),
         }
     }
 
-    fn get_comments_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        Ok(self.header.comments.iter().map(|s| Keywords::Comment(s.clone())).collect())
+    fn get_comments_keywords(&self) -> WriteResult<Vec<Keyword>> {
+        Ok(self.header.comments.iter().map(|s| Keyword::Comment(s.clone())).collect())
     }
 
-    fn get_devices_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        let mut keywords: Vec<Keywords> = vec![];
+    fn get_devices_keywords(&self) -> WriteResult<Vec<Keyword>> {
+        let mut keywords: Vec<Keyword> = vec![];
 
         for device in self.header.devices.iter() {
             for entry in device.entries.iter() {
-                keywords.push(Keywords::Device{name: device.name.clone(), value: entry.clone()});
+                keywords.push(Keyword::Device{name: device.name.clone(), value: entry.clone()});
             }
         }
 
         Ok(keywords)
     }
 
-    fn get_independent_variable_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        Ok(vec![Keywords::Var{
+    fn get_independent_variable_keywords(&self) -> WriteResult<Vec<Keyword>> {
+        Ok(vec![Keyword::Var{
             name: self.header.independent_variable.name.clone(),
             format: self.header.independent_variable.format.clone(),
             length: self.header.independent_variable.data.len()
         }])
     }
 
-    fn get_var_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        let mut keywords: Vec<Keywords> = vec![];
+    fn get_var_keywords(&self) -> WriteResult<Vec<Keyword>> {
+        let mut keywords: Vec<Keyword> = vec![];
 
         // Do not set if length == 0
         if self.header.independent_variable.data.len() > 0 {
-            keywords.push(Keywords::VarListBegin);
+            keywords.push(Keyword::VarListBegin);
             for &v in self.header.independent_variable.data.iter() {
-                keywords.push(Keywords::VarListItem(v));
+                keywords.push(Keyword::VarListItem(v));
             }
-            keywords.push(Keywords::VarListEnd);
+            keywords.push(Keyword::VarListEnd);
         }
 
         Ok(keywords)
     }
 
-    fn get_constants_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        Ok(self.header.constants.iter().map(|c| Keywords::Constant{name: c.name.clone(), value: c.value.clone()}).collect())
+    fn get_constants_keywords(&self) -> WriteResult<Vec<Keyword>> {
+        Ok(self.header.constants.iter().map(|c| Keyword::Constant{name: c.name.clone(), value: c.value.clone()}).collect())
     }
 
-    fn get_keywords(&self) -> WriteResult<Vec<Keywords>> {
-        let mut keywords: Vec<Keywords> = vec![];
+    fn get_keywords(&self) -> WriteResult<Vec<Keyword>> {
+        let mut keywords: Vec<Keyword> = vec![];
 
         keywords.append(&mut self.get_version_keywords()?);
         keywords.append(&mut self.get_name_keywords()?);
@@ -1830,25 +1830,25 @@ mod test_record {
 
             match record.get_keywords() {
                 Ok(v) => assert_eq!(v, vec![
-                    Keywords::CITIFile{version: String::from("A.01.00")},
-                    Keywords::Name(String::from("Name")),
-                    Keywords::Var{name: String::from("Var Name"), format: String::from("Format"), length: 1},
-                    Keywords::VarListBegin,
-                    Keywords::VarListItem(1.),
-                    Keywords::VarListEnd,
-                    Keywords::Constant{name: String::from("Const Name"), value: String::from("Value")},
-                    Keywords::Comment(String::from("A Comment")),
-                    Keywords::Device{name: String::from("Name A"), value: String::from("entry 1")},
-                    Keywords::Device{name: String::from("Name A"), value: String::from("entry 2")},
-                    Keywords::Data{name: String::from("Data Name A"), format: String::from("Format A")},
-                    Keywords::Data{name: String::from("Data Name B"), format: String::from("Format B")},
-                    Keywords::Begin,
-                    Keywords::DataPair{real: 1., imag: 2.},
-                    Keywords::End,
-                    Keywords::Begin,
-                    Keywords::DataPair{real: 3., imag: 5.},
-                    Keywords::DataPair{real: 4., imag: 6.},
-                    Keywords::End,
+                    Keyword::CITIFile{version: String::from("A.01.00")},
+                    Keyword::Name(String::from("Name")),
+                    Keyword::Var{name: String::from("Var Name"), format: String::from("Format"), length: 1},
+                    Keyword::VarListBegin,
+                    Keyword::VarListItem(1.),
+                    Keyword::VarListEnd,
+                    Keyword::Constant{name: String::from("Const Name"), value: String::from("Value")},
+                    Keyword::Comment(String::from("A Comment")),
+                    Keyword::Device{name: String::from("Name A"), value: String::from("entry 1")},
+                    Keyword::Device{name: String::from("Name A"), value: String::from("entry 2")},
+                    Keyword::Data{name: String::from("Data Name A"), format: String::from("Format A")},
+                    Keyword::Data{name: String::from("Data Name B"), format: String::from("Format B")},
+                    Keyword::Begin,
+                    Keyword::DataPair{real: 1., imag: 2.},
+                    Keyword::End,
+                    Keyword::Begin,
+                    Keyword::DataPair{real: 3., imag: 5.},
+                    Keyword::DataPair{real: 4., imag: 6.},
+                    Keyword::End,
                 ]),
                 e => panic!("{:?}", e),
             }
@@ -1872,9 +1872,9 @@ mod test_record {
                 record.header.independent_variable.data.push(1.);
                 match record.get_var_keywords() {
                     Ok(v) => assert_eq!(v, vec![
-                        Keywords::VarListBegin,
-                        Keywords::VarListItem(1.),
-                        Keywords::VarListEnd
+                        Keyword::VarListBegin,
+                        Keyword::VarListItem(1.),
+                        Keyword::VarListEnd
                     ]),
                     e => panic!("{:?}", e),
                 }
@@ -1888,11 +1888,11 @@ mod test_record {
                 record.header.independent_variable.data.push(3.);
                 match record.get_var_keywords() {
                     Ok(v) => assert_eq!(v, vec![
-                        Keywords::VarListBegin,
-                        Keywords::VarListItem(1.),
-                        Keywords::VarListItem(2.),
-                        Keywords::VarListItem(3.),
-                        Keywords::VarListEnd
+                        Keyword::VarListBegin,
+                        Keyword::VarListItem(1.),
+                        Keyword::VarListItem(2.),
+                        Keyword::VarListItem(3.),
+                        Keyword::VarListEnd
                     ]),
                     e => panic!("{:?}", e),
                 }
@@ -1916,7 +1916,7 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.constants.push(Constant{name: String::from("Name"), value: String::from("Value")});
                 match record.get_constants_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keywords::Constant{name: String::from("Name"), value: String::from("Value")}]),
+                    Ok(v) => assert_eq!(v, vec![Keyword::Constant{name: String::from("Name"), value: String::from("Value")}]),
                     e => panic!("{:?}", e),
                 }
             }
@@ -1928,8 +1928,8 @@ mod test_record {
                 record.header.constants.push(Constant{name: String::from("Name B"), value: String::from("Value B")});
                 match record.get_constants_keywords(){
                     Ok(v) => assert_eq!(v, vec![
-                        Keywords::Constant{name: String::from("Name A"), value: String::from("Value A")},
-                        Keywords::Constant{name: String::from("Name B"), value: String::from("Value B")}
+                        Keyword::Constant{name: String::from("Name A"), value: String::from("Value A")},
+                        Keyword::Constant{name: String::from("Name B"), value: String::from("Value B")}
                     ]),
                     e => panic!("{:?}", e),
                 }
@@ -1944,7 +1944,7 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.independent_variable.name = String::from("Name");
                 match record.get_independent_variable_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keywords::Var{
+                    Ok(v) => assert_eq!(v, vec![Keyword::Var{
                         name: String::from("Name"),
                         format: String::new(),
                         length: 0
@@ -1959,7 +1959,7 @@ mod test_record {
                 record.header.independent_variable.name = String::from("Name");
                 record.header.independent_variable.format = String::from("Format");
                 match record.get_independent_variable_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keywords::Var{
+                    Ok(v) => assert_eq!(v, vec![Keyword::Var{
                         name: String::from("Name"),
                         format: String::from("Format"),
                         length: 0
@@ -1975,7 +1975,7 @@ mod test_record {
                 record.header.independent_variable.format = String::from("Format");
                 record.header.independent_variable.data = vec![0.; 10];
                 match record.get_independent_variable_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keywords::Var{
+                    Ok(v) => assert_eq!(v, vec![Keyword::Var{
                         name: String::from("Name"),
                         format: String::from("Format"),
                         length: 10
@@ -2013,7 +2013,7 @@ mod test_record {
                 record.header.devices.push(Device{name: String::from("Name"), entries: vec![String::from("entry")]});
                 match record.get_devices_keywords() {
                     Ok(v) => assert_eq!(v, vec![
-                        Keywords::Device{name: String::from("Name"), value: String::from("entry")}
+                        Keyword::Device{name: String::from("Name"), value: String::from("entry")}
                     ]),
                     e => panic!("{:?}", e),
                 }
@@ -2025,8 +2025,8 @@ mod test_record {
                 record.header.devices.push(Device{name: String::from("Name"), entries: vec![String::from("entry 1"), String::from("entry 2")]});
                 match record.get_devices_keywords() {
                     Ok(v) => assert_eq!(v, vec![
-                        Keywords::Device{name: String::from("Name"), value: String::from("entry 1")},
-                        Keywords::Device{name: String::from("Name"), value: String::from("entry 2")}
+                        Keyword::Device{name: String::from("Name"), value: String::from("entry 1")},
+                        Keyword::Device{name: String::from("Name"), value: String::from("entry 2")}
                     ]),
                     e => panic!("{:?}", e),
                 }
@@ -2039,8 +2039,8 @@ mod test_record {
                 record.header.devices.push(Device{name: String::from("Name B"), entries: vec![String::from("entry 2")]});
                 match record.get_devices_keywords() {
                     Ok(v) => assert_eq!(v, vec![
-                        Keywords::Device{name: String::from("Name A"), value: String::from("entry 1")},
-                        Keywords::Device{name: String::from("Name B"), value: String::from("entry 2")}
+                        Keyword::Device{name: String::from("Name A"), value: String::from("entry 1")},
+                        Keyword::Device{name: String::from("Name B"), value: String::from("entry 2")}
                     ]),
                     e => panic!("{:?}", e),
                 }
@@ -2064,7 +2064,7 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.comments.push(String::from("A Comment"));
                 match record.get_comments_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keywords::Comment(String::from("A Comment"))]),
+                    Ok(v) => assert_eq!(v, vec![Keyword::Comment(String::from("A Comment"))]),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2076,8 +2076,8 @@ mod test_record {
                 record.header.comments.push(String::from("B Comment"));
                 match record.get_comments_keywords() {
                     Ok(v) => assert_eq!(v, vec![
-                        Keywords::Comment(String::from("A Comment")),
-                        Keywords::Comment(String::from("B Comment"))
+                        Keyword::Comment(String::from("A Comment")),
+                        Keyword::Comment(String::from("B Comment"))
                     ]),
                     e => panic!("{:?}", e),
                 }
@@ -2102,7 +2102,7 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.name = String::from("A.01.00");
                 match record.get_name_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keywords::Name(String::from("A.01.00"))]),
+                    Ok(v) => assert_eq!(v, vec![Keyword::Name(String::from("A.01.00"))]),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2126,7 +2126,7 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.version = String::from("A.01.00");
                 match record.get_version_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keywords::CITIFile{version: String::from("A.01.00")}]),
+                    Ok(v) => assert_eq!(v, vec![Keyword::CITIFile{version: String::from("A.01.00")}]),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2145,11 +2145,11 @@ mod test_record {
                 ]});
                 match record.get_data_keywords() {
                     Ok(v) => assert_eq!(v, vec![
-                        Keywords::Begin,
-                        Keywords::DataPair{real: 1., imag: 4.},
-                        Keywords::DataPair{real: 2., imag: 1e-6},
-                        Keywords::DataPair{real: -3., imag: 0.},
-                        Keywords::End
+                        Keyword::Begin,
+                        Keyword::DataPair{real: 1., imag: 4.},
+                        Keyword::DataPair{real: 2., imag: 1e-6},
+                        Keyword::DataPair{real: -3., imag: 0.},
+                        Keyword::End
                     ]),
                     e => panic!("{:?}", e),
                 }
@@ -2160,7 +2160,7 @@ mod test_record {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: String::new(), format: String::new(), samples: vec![Complex{re: 1., im: 2.}]});
                 match record.get_data_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End]),
+                    Ok(v) => assert_eq!(v, vec![Keyword::Begin, Keyword::DataPair{real: 1., imag: 2.}, Keyword::End]),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2172,8 +2172,8 @@ mod test_record {
                 record.data.push(DataArray{name: String::new(), format: String::new(), samples: vec![Complex{re: 3., im: 4.}]});
                 match record.get_data_keywords() {
                     Ok(v) => assert_eq!(v, vec![
-                            Keywords::Begin, Keywords::DataPair{real: 1., imag: 2.}, Keywords::End,
-                            Keywords::Begin, Keywords::DataPair{real: 3., imag: 4.}, Keywords::End
+                            Keyword::Begin, Keyword::DataPair{real: 1., imag: 2.}, Keyword::End,
+                            Keyword::Begin, Keyword::DataPair{real: 3., imag: 4.}, Keyword::End
                         ]),
                     e => panic!("{:?}", e),
                 }
@@ -2197,7 +2197,7 @@ mod test_record {
                 let mut record = Record::default();
                 record.data.push(DataArray{name: String::from("Name"), format: String::from("Format"), samples: vec![]});
                 match record.get_data_defines_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keywords::Data{name: String::from("Name"), format: String::from("Format")}]),
+                    Ok(v) => assert_eq!(v, vec![Keyword::Data{name: String::from("Name"), format: String::from("Format")}]),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2210,8 +2210,8 @@ mod test_record {
                 match record.get_data_defines_keywords() {
                     Ok(v) => {
                         assert_eq!(v, vec![
-                            Keywords::Data{name: String::from("Name A"), format: String::from("Format A")},
-                            Keywords::Data{name: String::from("Name B"), format: String::from("Format B")}
+                            Keyword::Data{name: String::from("Name A"), format: String::from("Format A")},
+                            Keyword::Data{name: String::from("Name B"), format: String::from("Format B")}
                         ]);
                     },
                     e => panic!("{:?}", e),
@@ -2421,9 +2421,9 @@ pub enum ReadError {
     #[error("Independent variable defined twice")]
     IndependentVariableDefinedTwice,
     #[error("Single use keyword `{0}` defined twice")]
-    SingleUseKeywordDefinedTwice(Keywords),
+    SingleUseKeywordDefinedTwice(Keyword),
     #[error("Keyword `{0}` is out of order in the record")]
-    OutOfOrderKeyword(Keywords),
+    OutOfOrderKeyword(Keyword),
     #[error("Cannot open record `{0}`: {1}")]
     CannotOpen(PathBuf, std::io::Error),
     #[error("Error on line {0}: {1}")]
@@ -2464,13 +2464,13 @@ mod test_reader_error {
 
         #[test]
         fn single_use_keyword_defined_twice() {
-            let error = ReadError::SingleUseKeywordDefinedTwice(Keywords::End);
+            let error = ReadError::SingleUseKeywordDefinedTwice(Keyword::End);
             assert_eq!(format!("{}", error), "Single use keyword `END` defined twice");
         }
 
         #[test]
         fn out_of_order_keyword() {
-            let error = ReadError::OutOfOrderKeyword(Keywords::Begin);
+            let error = ReadError::OutOfOrderKeyword(Keyword::Begin);
             assert_eq!(format!("{}", error), "Keyword `BEGIN` is out of order in the record");
         }
 
@@ -2561,7 +2561,7 @@ impl RecordReaderState {
         }
     }
 
-    pub fn process_keyword(self, keyword: Keywords) -> ReaderResult<Self> {
+    pub fn process_keyword(self, keyword: Keyword) -> ReaderResult<Self> {
         match self.state {
             RecordReaderStates::Header => RecordReaderState::state_header(self, keyword),
             RecordReaderStates::Data => RecordReaderState::state_data(self, keyword),
@@ -2570,11 +2570,11 @@ impl RecordReaderState {
         }
     }
 
-    fn state_header(mut self, keyword: Keywords) -> ReaderResult<Self> {
+    fn state_header(mut self, keyword: Keyword) -> ReaderResult<Self> {
         match keyword {
-            Keywords::CITIFile{version} => {
+            Keyword::CITIFile{version} => {
                 match self.version_aready_read {
-                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})),
+                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::CITIFile{version})),
                     false => {
                         self.version_aready_read = true;
                         self.record.header.version = version;
@@ -2582,9 +2582,9 @@ impl RecordReaderState {
                     },
                 }
             },
-            Keywords::Name(name) => {
+            Keyword::Name(name) => {
                 match self.name_already_read {
-                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::Name(name))),
+                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::Name(name))),
                     false => {
                         self.name_already_read = true;
                         self.record.header.name = name;
@@ -2592,21 +2592,21 @@ impl RecordReaderState {
                     }
                 }
             },
-            Keywords::Device{name, value} => {
+            Keyword::Device{name, value} => {
                 self.record.header.add_device(&name, &value);
                 Ok(self)
             },
-            Keywords::Comment(comment) => {
+            Keyword::Comment(comment) => {
                 self.record.header.comments.push(comment);
                 Ok(self)
             },
-            Keywords::Constant{name, value} => {
+            Keyword::Constant{name, value} => {
                 self.record.header.constants.push(Constant::new(&name, &value));
                 Ok(self)
             },
-            Keywords::Var{name, format, length} => {
+            Keyword::Var{name, format, length} => {
                 match self.var_already_read {
-                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})),
+                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::Var{name, format, length})),
                     false => {
                         self.var_already_read = true;
                         self.record.header.independent_variable.name = name;
@@ -2615,7 +2615,7 @@ impl RecordReaderState {
                     }
                 }
             },
-            Keywords::VarListBegin => {
+            Keyword::VarListBegin => {
                 match self.independent_variable_already_read {
                     false => {
                         self.state = RecordReaderStates::VarList;
@@ -2624,7 +2624,7 @@ impl RecordReaderState {
                     true => Err(ReadError::IndependentVariableDefinedTwice),
                 }
             },
-            Keywords::SegListBegin => {
+            Keyword::SegListBegin => {
                 match self.independent_variable_already_read {
                     false => {
                         self.state = RecordReaderStates::SeqList;
@@ -2633,11 +2633,11 @@ impl RecordReaderState {
                     true => Err(ReadError::IndependentVariableDefinedTwice),
                 }
             },
-            Keywords::Begin => {
+            Keyword::Begin => {
                 self.state = RecordReaderStates::Data;
                 Ok(self)
             },
-            Keywords::Data{name, format} => {
+            Keyword::Data{name, format} => {
                 self.record.data.push(DataArray::new(&name, &format));
                 Ok(self)
             },
@@ -2645,9 +2645,9 @@ impl RecordReaderState {
         }
     }
 
-    fn state_data(mut self, keyword: Keywords) -> ReaderResult<Self> {
+    fn state_data(mut self, keyword: Keyword) -> ReaderResult<Self> {
         match keyword {
-            Keywords::DataPair{real, imag} => {
+            Keyword::DataPair{real, imag} => {
                 if self.data_array_counter < self.record.data.len() {
                     self.record.data[self.data_array_counter].add_sample(real, imag);
                     Ok(self)
@@ -2655,7 +2655,7 @@ impl RecordReaderState {
                     Err(ReadError::DataArrayOverIndex)
                 }
             }
-            Keywords::End => {
+            Keyword::End => {
                 self.state = RecordReaderStates::Header;
                 self.data_array_counter += 1;
                 Ok(self)
@@ -2664,13 +2664,13 @@ impl RecordReaderState {
         }
     }
 
-    fn state_var_list(mut self, keyword: Keywords) -> ReaderResult<Self> {
+    fn state_var_list(mut self, keyword: Keyword) -> ReaderResult<Self> {
         match keyword {
-            Keywords::VarListItem(value) => {
+            Keyword::VarListItem(value) => {
                 self.record.header.independent_variable.push(value);
                 Ok(self)
             },
-            Keywords::VarListEnd => {
+            Keyword::VarListEnd => {
                 self.independent_variable_already_read = true;
                 self.state = RecordReaderStates::Header;
                 Ok(self)
@@ -2679,13 +2679,13 @@ impl RecordReaderState {
         }
     }
 
-    fn state_seq_list(mut self, keyword: Keywords) -> ReaderResult<Self> {
+    fn state_seq_list(mut self, keyword: Keyword) -> ReaderResult<Self> {
         match keyword {
-            Keywords::SegItem{first, last, number} => {
+            Keyword::SegItem{first, last, number} => {
                 self.record.header.independent_variable.seq(first, last, number);
                 Ok(self)
             },
-            Keywords::SegListEnd => {
+            Keyword::SegListEnd => {
                 self.independent_variable_already_read = true;
                 self.state = RecordReaderStates::Header;
                 Ok(self)
@@ -2793,7 +2793,7 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord() {
-                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -2807,18 +2807,18 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord_cannot_be_called_twice() {
-                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
                 let mut state = initialize_state();
                 state.version_aready_read = true;
                 match state.process_keyword(keyword) {
-                    Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::CITIFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn name() {
-                let keyword = Keywords::Name(String::from("Name"));
+                let keyword = Keyword::Name(String::from("Name"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -2832,18 +2832,18 @@ mod test_record_reader_state {
 
             #[test]
             fn name_cannot_be_called_twice() {
-                let keyword = Keywords::Name(String::from("CAL_SET"));
+                let keyword = Keyword::Name(String::from("CAL_SET"));
                 let mut state = initialize_state();
                 state.name_already_read = true;
                 match state.process_keyword(keyword) {
-                    Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::Name(name))) => assert_eq!(name, "CAL_SET"),
+                    Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::Name(name))) => assert_eq!(name, "CAL_SET"),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
+                let keyword = Keyword::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -2858,11 +2858,11 @@ mod test_record_reader_state {
 
             #[test]
             fn var_cannot_be_called_twice() {
-                let keyword = Keywords::Var{name: String::from("FREQ"), format: String::from("MAG"), length: 102};
+                let keyword = Keyword::Var{name: String::from("FREQ"), format: String::from("MAG"), length: 102};
                 let mut state = initialize_state();
                 state.var_already_read = true;
                 match state.process_keyword(keyword) {
-                    Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})) => {
+                    Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::Var{name, format, length})) => {
                         assert_eq!(name, "FREQ");
                         assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
@@ -2873,7 +2873,7 @@ mod test_record_reader_state {
 
             #[test]
             fn constant_empty() {
-                let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keyword::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -2886,7 +2886,7 @@ mod test_record_reader_state {
 
             #[test]
             fn constant_exists() {
-                let keyword = Keywords::Constant{name: String::from("New Name"), value: String::from("New Value")};
+                let keyword = Keyword::Constant{name: String::from("New Name"), value: String::from("New Value")};
                 let mut state = initialize_state();
                 state.record.header.constants.push(Constant::new("Name", "Value"));
                 match state.process_keyword(keyword) {
@@ -2900,7 +2900,7 @@ mod test_record_reader_state {
 
             #[test]
             fn device() {
-                let keyword = Keywords::Device{name: String::from("NA"), value: String::from("Value")};
+                let keyword = Keyword::Device{name: String::from("NA"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -2914,7 +2914,7 @@ mod test_record_reader_state {
 
             #[test]
             fn device_with_existing_device() {
-                let keyword = Keywords::Device{name: String::from("WVI"), value: String::from("1904")};
+                let keyword = Keyword::Device{name: String::from("WVI"), value: String::from("1904")};
                 let mut state = initialize_state();
                 state.record.header.add_device("NA", "Value");
                 match state.process_keyword(keyword) {
@@ -2930,7 +2930,7 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_list_begin() {
-                let keyword = Keywords::SegListBegin;
+                let keyword = Keyword::SegListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => assert_eq!(s.state, RecordReaderStates::SeqList),
@@ -2940,7 +2940,7 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_list_begin_when_already_read() {
-                let keyword = Keywords::SegListBegin;
+                let keyword = Keyword::SegListBegin;
                 let mut state = initialize_state();
                 state.independent_variable_already_read = true;
                 match state.process_keyword(keyword) {
@@ -2951,10 +2951,10 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_item() {
-                let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
+                let keyword = Keyword::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::SegItem{first, last, number})) => {
                         assert_relative_eq!(first, 10.);
                         assert_relative_eq!(last, 100.);
                         assert_eq!(number, 2);
@@ -2965,17 +2965,17 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_list_end() {
-                let keyword = Keywords::SegListEnd;
+                let keyword = Keyword::SegListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::SegListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var_list_begin() {
-                let keyword = Keywords::VarListBegin;
+                let keyword = Keyword::VarListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => assert_eq!(s.state, RecordReaderStates::VarList),
@@ -2985,7 +2985,7 @@ mod test_record_reader_state {
             
             #[test]
             fn var_list_begin_when_already_read() {
-                let keyword = Keywords::VarListBegin;
+                let keyword = Keyword::VarListBegin;
                 let mut state = initialize_state();
                 state.independent_variable_already_read = true;
                 match state.process_keyword(keyword) {
@@ -2996,17 +2996,17 @@ mod test_record_reader_state {
 
             #[test]
             fn var_list_item() {
-                let keyword = Keywords::VarListItem(1.);
+                let keyword = Keyword::VarListItem(1.);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::VarListItem(f))) => assert_relative_eq!(f, 1.),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn data() {
-                let keyword = Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
+                let keyword = Keyword::Data{name: String::from("S[1,1]"), format: String::from("RI")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3019,7 +3019,7 @@ mod test_record_reader_state {
 
             #[test]
             fn data_with_already_existing() {
-                let keyword = Keywords::Data{name: String::from("S[1,1]"), format: String::from("RI")};
+                let keyword = Keyword::Data{name: String::from("S[1,1]"), format: String::from("RI")};
                 let mut state = initialize_state();
                 state.record.data.push(DataArray {name: String::from("E"), format: String::from("RI"), samples: vec![]});
                 match state.process_keyword(keyword) {
@@ -3036,10 +3036,10 @@ mod test_record_reader_state {
 
             #[test]
             fn data_pair() {
-                let keyword = Keywords::DataPair{real: 1., imag: 2.};
+                let keyword = Keyword::DataPair{real: 1., imag: 2.};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::DataPair{real, imag})) => {
                         assert_relative_eq!(real, 1.);
                         assert_relative_eq!(imag, 2.);
                     },
@@ -3049,7 +3049,7 @@ mod test_record_reader_state {
 
             #[test]
             fn begin() {
-                let keyword = Keywords::Begin;
+                let keyword = Keyword::Begin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3062,17 +3062,17 @@ mod test_record_reader_state {
 
             #[test]
             fn end() {
-                let keyword = Keywords::End;
+                let keyword = Keyword::End;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::End)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::End)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn comment() {
-                let keyword = Keywords::Comment(String::from("Comment"));
+                let keyword = Keyword::Comment(String::from("Comment"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3085,7 +3085,7 @@ mod test_record_reader_state {
 
             #[test]
             fn comment_with_existing() {
-                let keyword = Keywords::Comment(String::from("Comment"));
+                let keyword = Keyword::Comment(String::from("Comment"));
                 let mut state = initialize_state();
                 state.record.header.comments.push(String::from("Comment First"));
                 match state.process_keyword(keyword) {
@@ -3116,30 +3116,30 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord() {
-                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::CITIFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn name() {
-                let keyword = Keywords::Name(String::from("Name"));
+                let keyword = Keyword::Name(String::from("Name"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Name(name))) => assert_eq!(name, "Name"),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
+                let keyword = Keyword::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Var{name, format, length})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
@@ -3150,10 +3150,10 @@ mod test_record_reader_state {
 
             #[test]
             fn constant() {
-                let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keyword::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Constant{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3163,10 +3163,10 @@ mod test_record_reader_state {
 
             #[test]
             fn device() {
-                let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keyword::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Device{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3176,20 +3176,20 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_list_begin() {
-                let keyword = Keywords::SegListBegin;
+                let keyword = Keyword::SegListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::SegListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn seg_item() {
-                let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
+                let keyword = Keyword::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::SegItem{first, last, number})) => {
                         assert_relative_eq!(first, 10.);
                         assert_relative_eq!(last, 100.);
                         assert_eq!(number, 2);
@@ -3200,60 +3200,60 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_list_end() {
-                let keyword = Keywords::SegListEnd;
+                let keyword = Keyword::SegListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::SegListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var_list_begin() {
-                let keyword = Keywords::VarListBegin;
+                let keyword = Keyword::VarListBegin;
                 let state = initialize_state();
                 match  state.process_keyword(keyword){ 
-                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::VarListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
             
             #[test]
             fn var_list_item() {
-                let keyword = Keywords::VarListItem(1.);
+                let keyword = Keyword::VarListItem(1.);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::VarListItem(f))) => assert_relative_eq!(f, 1.),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var_list_item_exponent() {
-                let keyword = Keywords::VarListItem(1e9);
+                let keyword = Keyword::VarListItem(1e9);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1e9),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::VarListItem(f))) => assert_relative_eq!(f, 1e9),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var_list_end() {
-                let keyword = Keywords::VarListEnd;
+                let keyword = Keyword::VarListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::VarListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn data() {
-                let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
+                let keyword = Keyword::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Data{name, format})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "Format");
                     },
@@ -3263,7 +3263,7 @@ mod test_record_reader_state {
 
             #[test]
             fn data_pair() {
-                let keyword = Keywords::DataPair{real: 1., imag: 2.};
+                let keyword = Keyword::DataPair{real: 1., imag: 2.};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3277,7 +3277,7 @@ mod test_record_reader_state {
 
             #[test]
             fn data_pair_second_array() {
-                let keyword = Keywords::DataPair{real: 1., imag: 2.};
+                let keyword = Keyword::DataPair{real: 1., imag: 2.};
                 let mut state = initialize_state();
                 state.record.data.push(DataArray::blank());
                 state.data_array_counter = 1;
@@ -3294,7 +3294,7 @@ mod test_record_reader_state {
 
             #[test]
             fn data_pair_out_of_bounds() {
-                let keyword = Keywords::DataPair{real: 1., imag: 2.};
+                let keyword = Keyword::DataPair{real: 1., imag: 2.};
                 let mut state = initialize_state();
                 state.data_array_counter = 1;
                 match state.process_keyword(keyword) {
@@ -3305,17 +3305,17 @@ mod test_record_reader_state {
 
             #[test]
             fn begin() {
-                let keyword = Keywords::Begin;
+                let keyword = Keyword::Begin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Begin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Begin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn end() {
-                let keyword = Keywords::End;
+                let keyword = Keyword::End;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3328,7 +3328,7 @@ mod test_record_reader_state {
 
             #[test]
             fn end_increment_index() {
-                let keyword = Keywords::End;
+                let keyword = Keyword::End;
                 let mut state = initialize_state();
                 state.data_array_counter = 1;
                 match state.process_keyword(keyword) {
@@ -3342,10 +3342,10 @@ mod test_record_reader_state {
 
             #[test]
             fn comment() {
-                let keyword = Keywords::Comment(String::from("Comment"));
+                let keyword = Keyword::Comment(String::from("Comment"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Comment(comment))) => assert_eq!(comment, "Comment"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Comment(comment))) => assert_eq!(comment, "Comment"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3367,30 +3367,30 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord() {
-                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::CITIFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn name() {
-                let keyword = Keywords::Name(String::from("Name"));
+                let keyword = Keyword::Name(String::from("Name"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Name(name))) => assert_eq!(name, "Name"),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
+                let keyword = Keyword::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Var{name, format, length})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
@@ -3401,10 +3401,10 @@ mod test_record_reader_state {
 
             #[test]
             fn constant() {
-                let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keyword::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Constant{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3414,10 +3414,10 @@ mod test_record_reader_state {
 
             #[test]
             fn device() {
-                let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keyword::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Device{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3427,20 +3427,20 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_list_begin() {
-                let keyword = Keywords::SegListBegin;
+                let keyword = Keyword::SegListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::SegListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn seg_item() {
-                let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
+                let keyword = Keyword::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::SegItem{first, last, number})) => {
                         assert_relative_eq!(first, 10.);
                         assert_relative_eq!(last, 100.);
                         assert_eq!(number, 2);
@@ -3451,27 +3451,27 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_list_end() {
-                let keyword = Keywords::SegListEnd;
+                let keyword = Keyword::SegListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::SegListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var_list_begin() {
-                let keyword = Keywords::VarListBegin;
+                let keyword = Keyword::VarListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::VarListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
             
             #[test]
             fn var_list_item() {
-                let keyword = Keywords::VarListItem(1.);
+                let keyword = Keyword::VarListItem(1.);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3484,7 +3484,7 @@ mod test_record_reader_state {
 
             #[test]
             fn var_list_item_exponent() {
-                let keyword = Keywords::VarListItem(1e9);
+                let keyword = Keyword::VarListItem(1e9);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3497,7 +3497,7 @@ mod test_record_reader_state {
 
             #[test]
             fn var_list_item_already_exists() {
-                let keyword = Keywords::VarListItem(1e9);
+                let keyword = Keyword::VarListItem(1e9);
                 let mut state = initialize_state();
                 state.record.header.independent_variable.push(1e8);
                 match state.process_keyword(keyword) {
@@ -3511,7 +3511,7 @@ mod test_record_reader_state {
 
             #[test]
             fn var_list_end() {
-                let keyword = Keywords::VarListEnd;
+                let keyword = Keyword::VarListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3524,10 +3524,10 @@ mod test_record_reader_state {
 
             #[test]
             fn data() {
-                let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
+                let keyword = Keyword::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Data{name, format})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "Format");
                     },
@@ -3537,10 +3537,10 @@ mod test_record_reader_state {
 
             #[test]
             fn data_pair() {
-                let keyword = Keywords::DataPair{real: 1., imag: 1.};
+                let keyword = Keyword::DataPair{real: 1., imag: 1.};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::DataPair{real, imag})) => {
                         assert_relative_eq!(real, 1.);
                         assert_relative_eq!(imag, 1.);
                     },
@@ -3550,30 +3550,30 @@ mod test_record_reader_state {
 
             #[test]
             fn begin() {
-                let keyword = Keywords::Begin;
+                let keyword = Keyword::Begin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Begin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Begin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn end() {
-                let keyword = Keywords::End;
+                let keyword = Keyword::End;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::End)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::End)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn comment() {
-                let keyword = Keywords::Comment(String::from("Comment"));
+                let keyword = Keyword::Comment(String::from("Comment"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Comment(comment))) => assert_eq!(comment, "Comment"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Comment(comment))) => assert_eq!(comment, "Comment"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3595,30 +3595,30 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord() {
-                let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::CITIFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn name() {
-                let keyword = Keywords::Name(String::from("Name"));
+                let keyword = Keyword::Name(String::from("Name"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Name(name))) => assert_eq!(name, "Name"),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var() {
-                let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
+                let keyword = Keyword::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Var{name, format, length})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
@@ -3629,10 +3629,10 @@ mod test_record_reader_state {
 
             #[test]
             fn constant() {
-                let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keyword::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Constant{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3642,10 +3642,10 @@ mod test_record_reader_state {
 
             #[test]
             fn device() {
-                let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
+                let keyword = Keyword::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Device{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3655,17 +3655,17 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_list_begin() {
-                let keyword = Keywords::SegListBegin;
+                let keyword = Keyword::SegListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::SegListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn seg_item() {
-                let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
+                let keyword = Keyword::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3678,7 +3678,7 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_item_triple() {
-                let keyword = Keywords::SegItem{first: 10., last: 100., number: 3};
+                let keyword = Keyword::SegItem{first: 10., last: 100., number: 3};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3691,7 +3691,7 @@ mod test_record_reader_state {
 
             #[test]
             fn seg_list_end() {
-                let keyword = Keywords::SegListEnd;
+                let keyword = Keyword::SegListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -3704,40 +3704,40 @@ mod test_record_reader_state {
 
             #[test]
             fn var_list_begin() {
-                let keyword = Keywords::VarListBegin;
+                let keyword = Keyword::VarListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::VarListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
             
             #[test]
             fn var_list_item() {
-                let keyword = Keywords::VarListItem(1.);
+                let keyword = Keyword::VarListItem(1.);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.0),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::VarListItem(f))) => assert_relative_eq!(f, 1.0),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn var_list_end() {
-                let keyword = Keywords::VarListEnd;
+                let keyword = Keyword::VarListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::VarListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn data() {
-                let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
+                let keyword = Keyword::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Data{name, format})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "Format");
                     },
@@ -3747,10 +3747,10 @@ mod test_record_reader_state {
 
             #[test]
             fn data_pair() {
-                let keyword = Keywords::DataPair{real: 1., imag: 1.};
+                let keyword = Keyword::DataPair{real: 1., imag: 1.};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keyword::DataPair{real, imag})) => {
                         assert_relative_eq!(real, 1.);
                         assert_relative_eq!(imag, 1.);
                     },
@@ -3760,30 +3760,30 @@ mod test_record_reader_state {
 
             #[test]
             fn begin() {
-                let keyword = Keywords::Begin;
+                let keyword = Keyword::Begin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Begin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Begin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn end() {
-                let keyword = Keywords::End;
+                let keyword = Keyword::End;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::End)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::End)) => (),
                     e => panic!("{:?}", e),
                 }
             }
 
             #[test]
             fn comment() {
-                let keyword = Keywords::Comment(String::from("Comment"));
+                let keyword = Keyword::Comment(String::from("Comment"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keywords::Comment(s))) => assert_eq!(s, "Comment"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::Comment(s))) => assert_eq!(s, "Comment"),
                     e => panic!("{:?}", e),
                 }
             }

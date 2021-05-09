@@ -65,7 +65,7 @@ pub enum Error {
     #[error("Parsing error: `{0}`")]
     ParseError(#[from] ParseError),
     #[error("Reading error: `{0}`")]
-    ReaderError(#[from] ReaderError),
+    ReadError(#[from] ReadError),
     #[error("Error writing record: `{0}`")]
     WriteError(#[from] WriteError)
 }
@@ -87,7 +87,7 @@ mod test_error {
 
         #[test]
         fn reader_error() {
-            let error = Error::ReaderError(ReaderError::DataArrayOverIndex);
+            let error = Error::ReadError(ReadError::DataArrayOverIndex);
             assert_eq!(format!("{}", error), "Reading error: `More data arrays than defined in header`");
         }
 
@@ -111,8 +111,8 @@ mod test_error {
 
         #[test]
         fn from_reader_error() {
-            match Error::from(ReaderError::DataArrayOverIndex) {
-                Error::ReaderError(ReaderError::DataArrayOverIndex) => (),
+            match Error::from(ReadError::DataArrayOverIndex) {
+                Error::ReadError(ReadError::DataArrayOverIndex) => (),
                 e => panic!("{:?}", e),
             }
         }
@@ -1655,7 +1655,7 @@ impl Record {
     }
 
     pub fn read<P: AsRef<Path>>(path: &P)  -> Result<Record> {
-        let mut file = File::open(path).map_err(|e| ReaderError::CannotOpen(path.as_ref().to_path_buf(), e))?;
+        let mut file = File::open(path).map_err(|e| ReadError::CannotOpen(path.as_ref().to_path_buf(), e))?;
         Record::read_from_source(&mut file)
     }
 
@@ -1664,10 +1664,10 @@ impl Record {
         let mut state = RecordReaderState::new();
 
         for (i, line) in buf_reader.lines().enumerate() {
-            let this_line = line.map_err(|e| ReaderError::ReadingError(e))?;
+            let this_line = line.map_err(|e| ReadError::ReadingError(e))?;
             // Filter out new lines
             if this_line.trim().len() > 0 {
-                let keyword = Keywords::from_str(&this_line).map_err(|e| ReaderError::LineError(i, e))?;
+                let keyword = Keywords::from_str(&this_line).map_err(|e| ReadError::LineError(i, e))?;
                 state = state.process_keyword(keyword)?;
             }
         }
@@ -2257,7 +2257,7 @@ mod test_record {
         #[test]
         fn cannot_read_empty_record() {
             match Record::read_from_source(&mut "".as_bytes()) {
-                Err(Error::ReaderError(ReaderError::NoName)) => (),
+                Err(Error::ReadError(ReadError::NoName)) => (),
                 e => panic!("{:?}", e),
             }
         }
@@ -2415,7 +2415,7 @@ mod test_record {
 
 /// Error during reading
 #[derive(Error, Debug)]
-pub enum ReaderError {
+pub enum ReadError {
     #[error("More data arrays than defined in header")]
     DataArrayOverIndex,
     #[error("Independent variable defined twice")]
@@ -2441,7 +2441,7 @@ pub enum ReaderError {
     #[error("Independent variable and data array {2} are different lengths ({0} != {1})")]
     VarAndDataDifferentLengths(usize, usize, usize),
 }
-type ReaderResult<T> = std::result::Result<T, ReaderError>;
+type ReaderResult<T> = std::result::Result<T, ReadError>;
 
 #[cfg(test)]
 mod test_reader_error {
@@ -2452,73 +2452,73 @@ mod test_reader_error {
 
         #[test]
         fn data_array_over_index() {
-            let error = ReaderError::DataArrayOverIndex;
+            let error = ReadError::DataArrayOverIndex;
             assert_eq!(format!("{}", error), "More data arrays than defined in header");
         }
 
         #[test]
         fn independent_variable_defined_twice() {
-            let error = ReaderError::IndependentVariableDefinedTwice;
+            let error = ReadError::IndependentVariableDefinedTwice;
             assert_eq!(format!("{}", error), "Independent variable defined twice");
         }
 
         #[test]
         fn single_use_keyword_defined_twice() {
-            let error = ReaderError::SingleUseKeywordDefinedTwice(Keywords::End);
+            let error = ReadError::SingleUseKeywordDefinedTwice(Keywords::End);
             assert_eq!(format!("{}", error), "Single use keyword `END` defined twice");
         }
 
         #[test]
         fn out_of_order_keyword() {
-            let error = ReaderError::OutOfOrderKeyword(Keywords::Begin);
+            let error = ReadError::OutOfOrderKeyword(Keywords::Begin);
             assert_eq!(format!("{}", error), "Keyword `BEGIN` is out of order in the record");
         }
 
         #[test]
         fn cannot_open() {
-            let error = ReaderError::CannotOpen(Path::new("/temp").to_path_buf(), std::io::ErrorKind::NotFound.into());
+            let error = ReadError::CannotOpen(Path::new("/temp").to_path_buf(), std::io::ErrorKind::NotFound.into());
             assert_eq!(format!("{}", error), "Cannot open record `/temp`: entity not found");
         }
 
         #[test]
         fn reading_error() {
-            let error = ReaderError::ReadingError(std::io::ErrorKind::NotFound.into());
+            let error = ReadError::ReadingError(std::io::ErrorKind::NotFound.into());
             assert_eq!(format!("{}", error), "Reading error occured: entity not found");
         }
 
         #[test]
         fn line_error() {
-            let error = ReaderError::LineError(10, ParseError::BadRegex);
+            let error = ReadError::LineError(10, ParseError::BadRegex);
             assert_eq!(format!("{}", error), "Error on line 10: Regex could not be parsed");
         }
 
         #[test]
         fn no_version() {
-            let error = ReaderError::NoVersion;
+            let error = ReadError::NoVersion;
             assert_eq!(format!("{}", error), "Version is not defined");
         }
 
         #[test]
         fn no_name() {
-            let error = ReaderError::NoName;
+            let error = ReadError::NoName;
             assert_eq!(format!("{}", error), "Name is not defined");
         }
 
         #[test]
         fn no_independent_variable() {
-            let error = ReaderError::NoIndependentVariable;
+            let error = ReadError::NoIndependentVariable;
             assert_eq!(format!("{}", error), "Indepent variable is not defined");
         }
 
         #[test]
         fn no_data() {
-            let error = ReaderError::NoData;
+            let error = ReadError::NoData;
             assert_eq!(format!("{}", error), "Data name and format is not defined");
         }
 
         #[test]
         fn var_and_data() {
-            let error = ReaderError::VarAndDataDifferentLengths(1, 2, 3);
+            let error = ReadError::VarAndDataDifferentLengths(1, 2, 3);
             assert_eq!(format!("{}", error), "Independent variable and data array 3 are different lengths (1 != 2)");
         }
     }
@@ -2574,7 +2574,7 @@ impl RecordReaderState {
         match keyword {
             Keywords::CITIFile{version} => {
                 match self.version_aready_read {
-                    true => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})),
+                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})),
                     false => {
                         self.version_aready_read = true;
                         self.record.header.version = version;
@@ -2584,7 +2584,7 @@ impl RecordReaderState {
             },
             Keywords::Name(name) => {
                 match self.name_already_read {
-                    true => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(name))),
+                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::Name(name))),
                     false => {
                         self.name_already_read = true;
                         self.record.header.name = name;
@@ -2606,7 +2606,7 @@ impl RecordReaderState {
             },
             Keywords::Var{name, format, length} => {
                 match self.var_already_read {
-                    true => Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})),
+                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})),
                     false => {
                         self.var_already_read = true;
                         self.record.header.independent_variable.name = name;
@@ -2621,7 +2621,7 @@ impl RecordReaderState {
                         self.state = RecordReaderStates::VarList;
                         Ok(self)
                     },
-                    true => Err(ReaderError::IndependentVariableDefinedTwice),
+                    true => Err(ReadError::IndependentVariableDefinedTwice),
                 }
             },
             Keywords::SegListBegin => {
@@ -2630,7 +2630,7 @@ impl RecordReaderState {
                         self.state = RecordReaderStates::SeqList;
                         Ok(self)
                     },
-                    true => Err(ReaderError::IndependentVariableDefinedTwice),
+                    true => Err(ReadError::IndependentVariableDefinedTwice),
                 }
             },
             Keywords::Begin => {
@@ -2641,7 +2641,7 @@ impl RecordReaderState {
                 self.record.data.push(DataArray::new(&name, &format));
                 Ok(self)
             },
-            _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
+            _ => Err(ReadError::OutOfOrderKeyword(keyword)),
         }
     }
 
@@ -2652,7 +2652,7 @@ impl RecordReaderState {
                     self.record.data[self.data_array_counter].add_sample(real, imag);
                     Ok(self)
                 } else {
-                    Err(ReaderError::DataArrayOverIndex)
+                    Err(ReadError::DataArrayOverIndex)
                 }
             }
             Keywords::End => {
@@ -2660,7 +2660,7 @@ impl RecordReaderState {
                 self.data_array_counter += 1;
                 Ok(self)
             },
-            _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
+            _ => Err(ReadError::OutOfOrderKeyword(keyword)),
         }
     }
 
@@ -2675,7 +2675,7 @@ impl RecordReaderState {
                 self.state = RecordReaderStates::Header;
                 Ok(self)
             },
-            _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
+            _ => Err(ReadError::OutOfOrderKeyword(keyword)),
         }
     }
 
@@ -2690,7 +2690,7 @@ impl RecordReaderState {
                 self.state = RecordReaderStates::Header;
                 Ok(self)
             },
-            _ => Err(ReaderError::OutOfOrderKeyword(keyword)),
+            _ => Err(ReadError::OutOfOrderKeyword(keyword)),
         }
     }
 
@@ -2705,27 +2705,27 @@ impl RecordReaderState {
     fn has_version(self) -> ReaderResult<Self> {
         match self.version_aready_read {
             true => Ok(self),
-            false => Err(ReaderError::NoVersion),
+            false => Err(ReadError::NoVersion),
         }
     }
 
     fn has_name(self) -> ReaderResult<Self> {
         match self.name_already_read {
             true => Ok(self),
-            false => Err(ReaderError::NoName),
+            false => Err(ReadError::NoName),
         }
     }
 
     fn has_var(self) -> ReaderResult<Self> {
         match self.var_already_read {
             true => Ok(self),
-            false => Err(ReaderError::NoIndependentVariable),
+            false => Err(ReadError::NoIndependentVariable),
         }
     }
 
     fn has_data(self) -> ReaderResult<Self> {
         match self.record.data.len() {
-            0 => Err(ReaderError::NoData),
+            0 => Err(ReadError::NoData),
             _ => Ok(self),
         }
     }
@@ -2740,7 +2740,7 @@ impl RecordReaderState {
                 n = k
             } else {
                 if n != k {
-                    return Err(ReaderError::VarAndDataDifferentLengths(n, k, i))
+                    return Err(ReadError::VarAndDataDifferentLengths(n, k, i))
                 }
             }
         }
@@ -2811,7 +2811,7 @@ mod test_record_reader_state {
                 let mut state = initialize_state();
                 state.version_aready_read = true;
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2836,7 +2836,7 @@ mod test_record_reader_state {
                 let mut state = initialize_state();
                 state.name_already_read = true;
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Name(name))) => assert_eq!(name, "CAL_SET"),
+                    Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::Name(name))) => assert_eq!(name, "CAL_SET"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2862,7 +2862,7 @@ mod test_record_reader_state {
                 let mut state = initialize_state();
                 state.var_already_read = true;
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})) => {
+                    Err(ReadError::SingleUseKeywordDefinedTwice(Keywords::Var{name, format, length})) => {
                         assert_eq!(name, "FREQ");
                         assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
@@ -2944,7 +2944,7 @@ mod test_record_reader_state {
                 let mut state = initialize_state();
                 state.independent_variable_already_read = true;
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::IndependentVariableDefinedTwice) => (),
+                    Err(ReadError::IndependentVariableDefinedTwice) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2954,7 +2954,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
                         assert_relative_eq!(first, 10.);
                         assert_relative_eq!(last, 100.);
                         assert_eq!(number, 2);
@@ -2968,7 +2968,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2989,7 +2989,7 @@ mod test_record_reader_state {
                 let mut state = initialize_state();
                 state.independent_variable_already_read = true;
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::IndependentVariableDefinedTwice) => (),
+                    Err(ReadError::IndependentVariableDefinedTwice) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2999,7 +2999,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3039,7 +3039,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::DataPair{real: 1., imag: 2.};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
                         assert_relative_eq!(real, 1.);
                         assert_relative_eq!(imag, 2.);
                     },
@@ -3065,7 +3065,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::End;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::End)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::End)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3119,7 +3119,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3129,7 +3129,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3139,7 +3139,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
@@ -3153,7 +3153,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3166,7 +3166,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3179,7 +3179,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3189,7 +3189,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
                         assert_relative_eq!(first, 10.);
                         assert_relative_eq!(last, 100.);
                         assert_eq!(number, 2);
@@ -3203,7 +3203,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3213,7 +3213,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
                 match  state.process_keyword(keyword){ 
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3223,7 +3223,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3233,7 +3233,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListItem(1e9);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1e9),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1e9),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3243,7 +3243,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3253,7 +3253,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "Format");
                     },
@@ -3298,7 +3298,7 @@ mod test_record_reader_state {
                 let mut state = initialize_state();
                 state.data_array_counter = 1;
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::DataArrayOverIndex) => (),
+                    Err(ReadError::DataArrayOverIndex) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3308,7 +3308,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Begin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Begin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3345,7 +3345,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(comment))) => assert_eq!(comment, "Comment"),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Comment(comment))) => assert_eq!(comment, "Comment"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3370,7 +3370,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3380,7 +3380,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3390,7 +3390,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
@@ -3404,7 +3404,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3417,7 +3417,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3430,7 +3430,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3440,7 +3440,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegItem{first: 10., last: 100., number: 2};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::SegItem{first, last, number})) => {
                         assert_relative_eq!(first, 10.);
                         assert_relative_eq!(last, 100.);
                         assert_eq!(number, 2);
@@ -3454,7 +3454,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3464,7 +3464,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3527,7 +3527,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "Format");
                     },
@@ -3540,7 +3540,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::DataPair{real: 1., imag: 1.};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
                         assert_relative_eq!(real, 1.);
                         assert_relative_eq!(imag, 1.);
                     },
@@ -3553,7 +3553,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Begin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Begin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3563,7 +3563,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::End;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::End)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::End)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3573,7 +3573,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(comment))) => assert_eq!(comment, "Comment"),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Comment(comment))) => assert_eq!(comment, "Comment"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3598,7 +3598,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::CITIFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::CITIFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3608,7 +3608,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Name(String::from("Name"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Name(name))) => assert_eq!(name, "Name"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3618,7 +3618,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Var{name: String::from("Name"), format: String::from("MAG"), length: 102};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Var{name, format, length})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "MAG");
                         assert_eq!(length, 102);
@@ -3632,7 +3632,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Constant{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Constant{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3645,7 +3645,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Device{name: String::from("Name"), value: String::from("Value")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Device{name, value})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(value, "Value");
                     },
@@ -3658,7 +3658,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::SegListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::SegListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3707,7 +3707,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListBegin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListBegin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3717,7 +3717,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListItem(1.);
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.0),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListItem(f))) => assert_relative_eq!(f, 1.0),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3727,7 +3727,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::VarListEnd;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::VarListEnd)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::VarListEnd)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3737,7 +3737,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Data{name: String::from("Name"), format: String::from("Format")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Data{name, format})) => {
                         assert_eq!(name, "Name");
                         assert_eq!(format, "Format");
                     },
@@ -3750,7 +3750,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::DataPair{real: 1., imag: 1.};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
+                    Err(ReadError::OutOfOrderKeyword(Keywords::DataPair{real, imag})) => {
                         assert_relative_eq!(real, 1.);
                         assert_relative_eq!(imag, 1.);
                     },
@@ -3763,7 +3763,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Begin;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Begin)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Begin)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3773,7 +3773,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::End;
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::End)) => (),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::End)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3783,7 +3783,7 @@ mod test_record_reader_state {
                 let keyword = Keywords::Comment(String::from("Comment"));
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReaderError::OutOfOrderKeyword(Keywords::Comment(s))) => assert_eq!(s, "Comment"),
+                    Err(ReadError::OutOfOrderKeyword(Keywords::Comment(s))) => assert_eq!(s, "Comment"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3827,7 +3827,7 @@ mod test_record_reader_state {
             let mut state = create_valid_state();
             state.record.data = vec![];
             match state.validate_record() {
-                Err(ReaderError::NoData) => (),
+                Err(ReadError::NoData) => (),
                 e => panic!("{:?}", e),
             }
         }
@@ -3837,7 +3837,7 @@ mod test_record_reader_state {
             let mut state = create_valid_state();
             state.version_aready_read = false;
             match state.validate_record() {
-                Err(ReaderError::NoVersion) => (),
+                Err(ReadError::NoVersion) => (),
                 e => panic!("{:?}", e),
             }
         }
@@ -3847,7 +3847,7 @@ mod test_record_reader_state {
             let mut state = create_valid_state();
             state.name_already_read = false;
             match state.validate_record() {
-                Err(ReaderError::NoName) => (),
+                Err(ReadError::NoName) => (),
                 e => panic!("{:?}", e),
             }
         }
@@ -3857,7 +3857,7 @@ mod test_record_reader_state {
             let mut state = create_valid_state();
             state.var_already_read = false;
             match state.validate_record() {
-                Err(ReaderError::NoIndependentVariable) => (),
+                Err(ReadError::NoIndependentVariable) => (),
                 e => panic!("{:?}", e),
             }
         }
@@ -3872,7 +3872,7 @@ mod test_record_reader_state {
             });
             state.record.header.independent_variable.data = vec![1.];
             match state.validate_record() {
-                Err(ReaderError::VarAndDataDifferentLengths(1, 0, 0)) => (),
+                Err(ReadError::VarAndDataDifferentLengths(1, 0, 0)) => (),
                 e => panic!("{:?}", e),
             }
         }
@@ -3886,7 +3886,7 @@ mod test_record_reader_state {
                 let mut state = RecordReaderState::new();
                 state.record = Record::blank();
                 match state.has_data() {
-                    Err(ReaderError::NoData) => (),
+                    Err(ReadError::NoData) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3915,7 +3915,7 @@ mod test_record_reader_state {
                 state.record = Record::blank();
                 state.var_already_read = false;
                 match state.has_var() {
-                    Err(ReaderError::NoIndependentVariable) => (),
+                    Err(ReadError::NoIndependentVariable) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3942,7 +3942,7 @@ mod test_record_reader_state {
                 state.record = Record::blank();
                 state.version_aready_read = false;
                 match state.has_version() {
-                    Err(ReaderError::NoVersion) => (),
+                    Err(ReadError::NoVersion) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3969,7 +3969,7 @@ mod test_record_reader_state {
                 state.record = Record::blank();
                 state.name_already_read = false;
                 match state.has_name() {
-                    Err(ReaderError::NoName) => (),
+                    Err(ReadError::NoName) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -4043,7 +4043,7 @@ mod test_record_reader_state {
                 });
                 state.record.header.independent_variable.data = vec![1.];
                 match state.var_and_data_same_length() {
-                    Err(ReaderError::VarAndDataDifferentLengths(1, 2, 0)) => (),
+                    Err(ReadError::VarAndDataDifferentLengths(1, 2, 0)) => (),
                     e => panic!("{:?}", e),
                 }
             }
@@ -4064,7 +4064,7 @@ mod test_record_reader_state {
                 });
                 state.record.header.independent_variable.data = vec![1.];
                 match state.var_and_data_same_length() {
-                    Err(ReaderError::VarAndDataDifferentLengths(1, 2, 1)) => (),
+                    Err(ReadError::VarAndDataDifferentLengths(1, 2, 1)) => (),
                     e => panic!("{:?}", e),
                 }
             }

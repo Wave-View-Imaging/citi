@@ -17,6 +17,9 @@ tempfile = "3.2.0"
 rand = "0.8.3"
 criterion = "0.3.4"
 
+[lib]
+bench = false
+
 [[bench]]
 name = "citi_benchmark"
 harness = false

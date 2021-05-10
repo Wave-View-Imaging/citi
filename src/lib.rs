@@ -200,8 +200,8 @@ mod test_parse_error {
 /// A vector of these keywords represents a file.
 #[derive(Debug, PartialEq)]
 pub enum Keyword {
-    /// CITIFile version e.g. A.01.01
-    CITIFile{version: String},
+    /// CitiFile version e.g. A.01.01
+    CitiFile{version: String},
     /// Name. Single word with no spaces. e.g. CAL_SET
     Name(String),
     /// Independent variable with name, format, and number of samples. e.g. VAR FREQ MAG 201
@@ -316,7 +316,7 @@ impl TryFrom<&str> for Keyword {
             },
             _ if RE_CITIFILE.is_match(line) => {
                 let cap = RE_CITIFILE.captures(line).ok_or(ParseError::BadRegex)?;
-                Ok(Keyword::CITIFile{
+                Ok(Keyword::CitiFile{
                     version: String::from(cap.name("Version").map(|m| m.as_str()).ok_or(ParseError::BadRegex)?)
                 })
             },
@@ -339,7 +339,7 @@ impl TryFrom<&str> for Keyword {
 impl fmt::Display for Keyword {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Keyword::CITIFile{version} => write!(f, "CITIFILE {}", version),
+            Keyword::CitiFile{version} => write!(f, "CITIFILE {}", version),
             Keyword::Name(name) => write!(f, "NAME {}", name),
             Keyword::Var{name, format, length} => write!(f, "VAR {} {} {}", name, format, length),
             Keyword::Constant{name, value} => write!(f, "CONSTANT {} {}", name, value),
@@ -369,13 +369,13 @@ mod test_keywords {
 
         #[test]
         fn citirecord_a_01_00() {
-            let keyword = Keyword::CITIFile{version: String::from("A.01.00")};
+            let keyword = Keyword::CitiFile{version: String::from("A.01.00")};
             assert_eq!("CITIFILE A.01.00", format!("{}", keyword));
         }
 
         #[test]
         fn citirecord_a_01_01() {
-            let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
+            let keyword = Keyword::CitiFile{version: String::from("A.01.01")};
             assert_eq!("CITIFILE A.01.01", format!("{}", keyword));
         }
 
@@ -510,7 +510,7 @@ mod test_keywords {
         #[test]
         fn citirecord_a_01_00() {
             match Keyword::from_str("CITIFILE A.01.00") {
-                Ok(Keyword::CITIFile{version}) => assert_eq!(version, "A.01.00"),
+                Ok(Keyword::CitiFile{version}) => assert_eq!(version, "A.01.00"),
                 e => panic!("{:?}", e),
             }
         }
@@ -518,7 +518,7 @@ mod test_keywords {
         #[test]
         fn citirecord_a_01_01() {
             match Keyword::from_str("CITIFILE A.01.01") {
-                Ok(Keyword::CITIFile{version}) => assert_eq!(version, "A.01.01"),
+                Ok(Keyword::CitiFile{version}) => assert_eq!(version, "A.01.01"),
                 e => panic!("{:?}", e),
             }
         }
@@ -799,7 +799,7 @@ mod test_keywords {
         #[test]
         fn citirecord_a_01_00() {
             match Keyword::try_from("CITIFILE A.01.00") {
-                Ok(Keyword::CITIFile{version}) => assert_eq!(version, "A.01.00"),
+                Ok(Keyword::CitiFile{version}) => assert_eq!(version, "A.01.00"),
                 e => panic!("{:?}", e),
             }
         }
@@ -807,7 +807,7 @@ mod test_keywords {
         #[test]
         fn citirecord_a_01_01() {
             match Keyword::try_from("CITIFILE A.01.01") {
-                Ok(Keyword::CITIFile{version}) => assert_eq!(version, "A.01.01"),
+                Ok(Keyword::CitiFile{version}) => assert_eq!(version, "A.01.01"),
                 e => panic!("{:?}", e),
             }
         }
@@ -1315,9 +1315,8 @@ impl Header {
 
     pub fn add_device(&mut self, device_name: &str, value: &str) {
         self.create_device(device_name);
-        match self.index_device(device_name) {
-            Some(i) => self.devices[i].entries.push(String::from(value)),
-            None => (), // Never occurs
+        if let Some(i) = self.index_device(device_name) {
+            self.devices[i].entries.push(String::from(value));
         }
     }
 
@@ -1681,9 +1680,9 @@ impl Record {
         let mut state = RecordReaderState::new();
 
         for (i, line) in reader.lines().enumerate() {
-            let this_line = line.map_err(|e| ReadError::ReadingError(e))?;
+            let this_line = line.map_err(ReadError::ReadingError)?;
             // Filter out new lines
-            if this_line.trim().len() > 0 {
+            if !this_line.trim().is_empty() {
                 let keyword = Keyword::from_str(&this_line).map_err(|e| ReadError::LineError(i, e))?;
                 state = state.process_keyword(keyword)?;
             }
@@ -1707,12 +1706,13 @@ impl Record {
         let keywords = self.get_keywords()?;
 
         for keyword in keywords.iter() {
-            writeln!(writer, "{}", keyword).map_err(|e| WriteError::WrittingError(e))?;
+            writeln!(writer, "{}", keyword).map_err(WriteError::WrittingError)?;
         }
 
         Ok(())
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn get_data_keywords(&self) -> WriteResult<Vec<Keyword>> {
         let mut keywords: Vec<Keyword> = vec![];
 
@@ -1733,9 +1733,9 @@ impl Record {
         let mut keywords: Vec<Keyword> = vec![];
 
         for (i, array) in self.data.iter().enumerate() {
-            match (array.name.len() > 0, array.format.len() > 0) {
-                (false, _) => return Err(WriteError::NoDataName(i)),
-                (_, false) => return Err(WriteError::NoDataFormat(i)),
+            match (array.name.is_empty(), array.format.is_empty()) {
+                (true, _) => return Err(WriteError::NoDataName(i)),
+                (_, true) => return Err(WriteError::NoDataFormat(i)),
                 (_, _) => keywords.push(Keyword::Data{name: array.name.clone(), format: array.format.clone()}),
             }
         }
@@ -1743,23 +1743,25 @@ impl Record {
     }
 
     fn get_version_keywords(&self) -> WriteResult<Vec<Keyword>> {
-        match self.header.version.len() > 0 {
-            true => Ok(vec![Keyword::CITIFile{version: self.header.version.clone()}]),
+        match !self.header.version.is_empty() {
+            true => Ok(vec![Keyword::CitiFile{version: self.header.version.clone()}]),
             false => Err(WriteError::NoVersion),
         }
     }
 
     fn get_name_keywords(&self) -> WriteResult<Vec<Keyword>> {
-        match self.header.name.len() > 0 {
+        match !self.header.name.is_empty() {
             true => Ok(vec![Keyword::Name(self.header.name.clone())]),
             false => Err(WriteError::NoName),
         }
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn get_comments_keywords(&self) -> WriteResult<Vec<Keyword>> {
         Ok(self.header.comments.iter().map(|s| Keyword::Comment(s.clone())).collect())
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn get_devices_keywords(&self) -> WriteResult<Vec<Keyword>> {
         let mut keywords: Vec<Keyword> = vec![];
 
@@ -1772,6 +1774,7 @@ impl Record {
         Ok(keywords)
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn get_independent_variable_keywords(&self) -> WriteResult<Vec<Keyword>> {
         Ok(vec![Keyword::Var{
             name: self.header.independent_variable.name.clone(),
@@ -1780,11 +1783,12 @@ impl Record {
         }])
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn get_var_keywords(&self) -> WriteResult<Vec<Keyword>> {
         let mut keywords: Vec<Keyword> = vec![];
 
         // Do not set if length == 0
-        if self.header.independent_variable.data.len() > 0 {
+        if !self.header.independent_variable.data.is_empty() {
             keywords.push(Keyword::VarListBegin);
             for &v in self.header.independent_variable.data.iter() {
                 keywords.push(Keyword::VarListItem(v));
@@ -1795,6 +1799,7 @@ impl Record {
         Ok(keywords)
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn get_constants_keywords(&self) -> WriteResult<Vec<Keyword>> {
         Ok(self.header.constants.iter().map(|c| Keyword::Constant{name: c.name.clone(), value: c.value.clone()}).collect())
     }
@@ -1856,7 +1861,7 @@ mod test_record {
 
             match record.get_keywords() {
                 Ok(v) => assert_eq!(v, vec![
-                    Keyword::CITIFile{version: String::from("A.01.00")},
+                    Keyword::CitiFile{version: String::from("A.01.00")},
                     Keyword::Name(String::from("Name")),
                     Keyword::Var{name: String::from("Var Name"), format: String::from("Format"), length: 1},
                     Keyword::VarListBegin,
@@ -2152,7 +2157,7 @@ mod test_record {
                 let mut record = Record::default();
                 record.header.version = String::from("A.01.00");
                 match record.get_version_keywords() {
-                    Ok(v) => assert_eq!(v, vec![Keyword::CITIFile{version: String::from("A.01.00")}]),
+                    Ok(v) => assert_eq!(v, vec![Keyword::CitiFile{version: String::from("A.01.00")}]),
                     e => panic!("{:?}", e),
                 }
             }
@@ -2590,9 +2595,9 @@ impl RecordReaderState {
 
     fn state_header(mut self, keyword: Keyword) -> ReaderResult<Self> {
         match keyword {
-            Keyword::CITIFile{version} => {
+            Keyword::CitiFile{version} => {
                 match self.version_aready_read {
-                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::CITIFile{version})),
+                    true => Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::CitiFile{version})),
                     false => {
                         self.version_aready_read = true;
                         self.record.header.version = version;
@@ -2756,10 +2761,8 @@ impl RecordReaderState {
             let k = data_array.samples.len();
             if n == 0 {
                 n = k
-            } else {
-                if n != k {
-                    return Err(ReadError::VarAndDataDifferentLengths(n, k, i))
-                }
+            } else if n != k {
+                return Err(ReadError::VarAndDataDifferentLengths(n, k, i))
             }
         }
         Ok(self)
@@ -2811,7 +2814,7 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord() {
-                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CitiFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
                     Ok(s) => {
@@ -2825,11 +2828,11 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord_cannot_be_called_twice() {
-                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CitiFile{version: String::from("A.01.01")};
                 let mut state = initialize_state();
                 state.version_aready_read = true;
                 match state.process_keyword(keyword) {
-                    Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::SingleUseKeywordDefinedTwice(Keyword::CitiFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3134,10 +3137,10 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord() {
-                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CitiFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keyword::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::CitiFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3385,10 +3388,10 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord() {
-                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CitiFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keyword::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::CitiFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }
@@ -3613,10 +3616,10 @@ mod test_record_reader_state {
 
             #[test]
             fn citirecord() {
-                let keyword = Keyword::CITIFile{version: String::from("A.01.01")};
+                let keyword = Keyword::CitiFile{version: String::from("A.01.01")};
                 let state = initialize_state();
                 match state.process_keyword(keyword) {
-                    Err(ReadError::OutOfOrderKeyword(Keyword::CITIFile{version})) => assert_eq!(version, "A.01.01"),
+                    Err(ReadError::OutOfOrderKeyword(Keyword::CitiFile{version})) => assert_eq!(version, "A.01.01"),
                     e => panic!("{:?}", e),
                 }
             }

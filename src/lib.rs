@@ -48,9 +48,7 @@ use num_complex::Complex;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::fmt;
-use std::path::{Path,PathBuf};
-use std::io::{BufReader, BufRead};
-use std::fs::File;
+use std::io::BufRead;
 
 use thiserror::Error;
 
@@ -1581,8 +1579,6 @@ pub enum WriteError {
     NoDataName(usize),
     #[error("Data array {0} has no format")]
     NoDataFormat(usize),
-    #[error("Cannot write record to `{0}`: {1}")]
-    CannotWrite(PathBuf, std::io::Error),
     #[error("Writing error occured: {0}")]
     WrittingError(std::io::Error),
 }
@@ -1633,12 +1629,6 @@ mod test_write_result {
         }
 
         #[test]
-        fn cannot_write() {
-            let error = WriteError::CannotWrite(Path::new("/temp").to_path_buf(), std::io::ErrorKind::NotFound.into());
-            assert_eq!(format!("{}", error), "Cannot write record to `/temp`: entity not found");
-        }
-
-        #[test]
         fn writting_error() {
             let error = WriteError::WrittingError(std::io::ErrorKind::NotFound.into());
             assert_eq!(format!("{}", error), "Writing error occured: entity not found");
@@ -1654,16 +1644,10 @@ impl Record {
         }
     }
 
-    pub fn read<P: AsRef<Path>>(path: &P)  -> Result<Record> {
-        let mut file = File::open(path).map_err(|e| ReadError::CannotOpen(path.as_ref().to_path_buf(), e))?;
-        Record::read_from_source(&mut file)
-    }
-
-    pub fn read_from_source<R: std::io::Read>(reader: &mut R) -> Result<Record> {
-        let buf_reader = BufReader::new(reader);
+    pub fn read_from_source<R: std::io::BufRead>(reader: &mut R) -> Result<Record> {
         let mut state = RecordReaderState::new();
 
-        for (i, line) in buf_reader.lines().enumerate() {
+        for (i, line) in reader.lines().enumerate() {
             let this_line = line.map_err(|e| ReadError::ReadingError(e))?;
             // Filter out new lines
             if this_line.trim().len() > 0 {
@@ -1671,6 +1655,7 @@ impl Record {
                 state = state.process_keyword(keyword)?;
             }
         }
+
         Ok(state.validate_record()?.record)
     }
 
@@ -1803,12 +1788,14 @@ impl Record {
 #[cfg(test)]
 mod test_record {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn write_gives_error_on_bad_file() {
         let record = Record::default();
-        match record.write(&Path::new("")) {
-            Err(Error::WriteError(WriteError::CannotWrite(path, std::io::Error{..}))) => assert_eq!(path, Path::new("").to_path_buf()),
+        let mut file = std::fs::File::create(tempdir().unwrap().path().join("temp.cti")).unwrap();
+        match record.write_to_sink(&mut file) {
+            Err(Error::WriteError(WriteError::NoName)) => (),
             e => panic!("{:?}", e),
         }
     }
@@ -2424,8 +2411,6 @@ pub enum ReadError {
     SingleUseKeywordDefinedTwice(Keyword),
     #[error("Keyword `{0}` is out of order in the record")]
     OutOfOrderKeyword(Keyword),
-    #[error("Cannot open record `{0}`: {1}")]
-    CannotOpen(PathBuf, std::io::Error),
     #[error("Error on line {0}: {1}")]
     LineError(usize, ParseError),
     #[error("Reading error occured: {0}")]
@@ -2472,12 +2457,6 @@ mod test_reader_error {
         fn out_of_order_keyword() {
             let error = ReadError::OutOfOrderKeyword(Keyword::Begin);
             assert_eq!(format!("{}", error), "Keyword `BEGIN` is out of order in the record");
-        }
-
-        #[test]
-        fn cannot_open() {
-            let error = ReadError::CannotOpen(Path::new("/temp").to_path_buf(), std::io::ErrorKind::NotFound.into());
-            assert_eq!(format!("{}", error), "Cannot open record `/temp`: entity not found");
         }
 
         #[test]

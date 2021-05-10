@@ -2,8 +2,8 @@ use citi;
 use criterion::{black_box, criterion_group, Criterion};
 use tempfile::tempdir;
 use rand::Rng;
-use std::path::Path;
 use num_complex::Complex;
+use std::fs::File;
 
 fn create_record(n: usize) -> citi::Record {
     let mut rng = rand::thread_rng();
@@ -24,15 +24,15 @@ fn create_record(n: usize) -> citi::Record {
     record
 }
 
-fn write_record<P: AsRef<Path>>(record: &citi::Record, path: &P) {
-    record.write(path).unwrap();
+fn write_record<W: std::io::Write>(record: &citi::Record, writer: &mut W) {
+    record.write_to_sink(writer).unwrap();
 }
 
 fn write_benchmark(c: &mut Criterion) {
-    c.bench_function("write    10 samples", |b| b.iter(|| write_record(black_box(&create_record(   10)), black_box(&tempdir().unwrap().path().join("file.cti")))));
-    c.bench_function("write   100 samples", |b| b.iter(|| write_record(black_box(&create_record(  100)), black_box(&tempdir().unwrap().path().join("file.cti")))));
-    c.bench_function("write  1000 samples", |b| b.iter(|| write_record(black_box(&create_record( 1000)), black_box(&tempdir().unwrap().path().join("file.cti")))));
-    c.bench_function("write 10000 samples", |b| b.iter(|| write_record(black_box(&create_record(10000)), black_box(&tempdir().unwrap().path().join("file.cti")))));
+    c.bench_function("write    10 samples", |b| b.iter(|| write_record(black_box(&create_record(   10)), black_box(&mut File::create(tempdir().unwrap().path().join("file.cti")).unwrap()))));
+    c.bench_function("write   100 samples", |b| b.iter(|| write_record(black_box(&create_record(  100)), black_box(&mut File::create(tempdir().unwrap().path().join("file.cti")).unwrap()))));
+    c.bench_function("write  1000 samples", |b| b.iter(|| write_record(black_box(&create_record( 1000)), black_box(&mut File::create(tempdir().unwrap().path().join("file.cti")).unwrap()))));
+    c.bench_function("write 10000 samples", |b| b.iter(|| write_record(black_box(&create_record(10000)), black_box(&mut File::create(tempdir().unwrap().path().join("file.cti")).unwrap()))));
 }
 
 criterion_group!(write, write_benchmark);

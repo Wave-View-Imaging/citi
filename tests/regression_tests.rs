@@ -2,6 +2,8 @@ use citi::{
     Result, Record, Device, DataArray, Var, assert_array_relative_eq, assert_complex_array_relative_eq
 };
 use std::path::PathBuf;
+use std::io::BufReader;
+use std::fs::File;
 use num_complex::Complex;
 
 #[cfg(test)]
@@ -26,7 +28,8 @@ mod cti_read_regression_tests {
         }
 
         fn setup() -> Result<Record> {
-            Record::read(&filename())
+            let mut file = BufReader::new(File::open(filename()).unwrap());
+            Record::read_from_source(&mut file)
         }
 
         #[test]
@@ -122,7 +125,8 @@ mod cti_read_regression_tests {
         }
 
         fn setup() -> Result<Record> {
-            Record::read(&filename())
+            let mut file = BufReader::new(File::open(filename()).unwrap());
+            Record::read_from_source(&mut file)
         }
 
         #[test]
@@ -235,7 +239,8 @@ mod cti_read_regression_tests {
         }
 
         fn setup() -> Result<Record> {
-            Record::read(&filename())
+            let mut file = BufReader::new(File::open(filename()).unwrap());
+            Record::read_from_source(&mut file)
         }
 
         #[test]
@@ -339,7 +344,8 @@ mod cti_read_regression_tests {
         }
 
         fn setup() -> Result<Record> {
-            Record::read(&filename())
+            let mut file = BufReader::new(File::open(filename()).unwrap());
+            Record::read_from_source(&mut file)
         }
 
         #[test]
@@ -565,11 +571,12 @@ mod cti_write_regression_tests {
 
     #[test]
     fn display_memory() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("temp-display-memory.cti");
+        let tmp = std::sync::Arc::new(tempdir().unwrap());
+        let filename = tmp.path().join("temp-display-memory.cti");
+        let mut file = File::create(filename.clone()).unwrap();
         let record = display_memory_record();
-        record.write(&file_path).unwrap();
+        record.write_to_sink(&mut file).unwrap();
 
-        assert_files_equal!(display_memory_filename(), file_path);
+        assert_files_equal!(display_memory_filename(), filename);
     }
 }

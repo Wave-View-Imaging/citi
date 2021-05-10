@@ -17,7 +17,7 @@
 //! 
 //! A non-standard but industry prevelent comment section is added formated with a bang:
 //! 
-//! ```.no_test
+//! ```no_test
 //! !COMMENT
 //! ```
 //! 
@@ -25,12 +25,31 @@
 //! 
 //! ## IO Example
 //! 
-//! ```.no_test
-//! let record = Record::read(&PathBuf::from("input.cti")).unwrap();
-//! record.write(&PathBuf::from("output.cti")).unwrap();
+//! The object must implement the [`BufRead`] trait since CITI files are read
+//! line-by-line. As a result, two reads will lead to a fail on the second read,
+//! since the buffer is empty.
+//! 
+//! Read file:
+//! ```no_run
+//! use citi::Record;
+//! use std::fs::File;
+//! use std::io::BufReader;
+//! 
+//! let mut file = BufReader::new(File::open("file.cti").unwrap());
+//! let record = Record::read_from_source(&mut file);
 //! ```
 //! 
-//! ## Input-Output consistency:
+//! Write file:
+//! ```no_run
+//! use citi::Record;
+//! use std::fs::File;
+//! 
+//! let record = Record::default();
+//! let mut file = File::create("file.cti").unwrap();
+//! record.write_to_sink(&mut file);
+//! ```
+//! 
+//! ## Input-Output Consistency:
 //! 
 //! General input-output consistency cannot be guaranteed with CITI records because of their design.
 //! That is, if a record is read in and read out, the byte representation of the record may change,
@@ -1057,7 +1076,7 @@ mod test_keywords {
 /// Device-specific value.
 /// 
 /// This should be used over constants to conform to the standard.
-/// ```.no_test
+/// ```no_test
 /// #NA VERSION HP8510B.05.00
 /// ```
 #[derive(Debug, PartialEq, Clone)]
@@ -1644,6 +1663,20 @@ impl Record {
         }
     }
 
+    /// Read record
+    /// 
+    /// The object must implement the `BufRead` trait since CITI files
+    /// are read line-by-line.
+    /// 
+    /// Example usage:
+    /// ```no_run
+    /// use citi::Record;
+    /// use std::fs::File;
+    /// use std::io::BufReader;
+    /// 
+    /// let mut file = BufReader::new(File::open("file.cti").unwrap());
+    /// let record = Record::read_from_source(&mut file);
+    /// ```
     pub fn read_from_source<R: std::io::BufRead>(reader: &mut R) -> Result<Record> {
         let mut state = RecordReaderState::new();
 
@@ -1659,11 +1692,17 @@ impl Record {
         Ok(state.validate_record()?.record)
     }
 
-    pub fn write<P: AsRef<Path>>(&self, path: &P)  -> Result<()> {
-        let mut buffer = std::io::BufWriter::new(std::fs::File::create(path).map_err(|e| WriteError::CannotWrite(path.as_ref().to_path_buf(), e))?);
-        self.write_to_sink(&mut buffer)
-    }
-
+    /// Write record
+    /// 
+    /// Example usage:
+    /// ```no_run
+    /// use citi::Record;
+    /// use std::fs::File;
+    /// 
+    /// let record = Record::default();
+    /// let mut file = File::create("file.cti").unwrap();
+    /// record.write_to_sink(&mut file);
+    /// ```
     pub fn write_to_sink<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
         let keywords = self.get_keywords()?;
 

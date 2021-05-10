@@ -1,8 +1,8 @@
 use citi;
 use criterion::{black_box, criterion_group, Criterion};
-use std::path::PathBuf;
-use std::io::BufReader;
 use std::fs::File;
+use std::io::BufReader;
+use std::path::PathBuf;
 
 fn read_record(filename: &str) {
     let mut path_buf = base_directory();
@@ -32,9 +32,4 @@ read_benchmark!(display_memory, "display_memory.cti");
 read_benchmark!(list_cal_set, "list_cal_set.cti");
 read_benchmark!(wvi_file, "wvi_file.cti");
 
-criterion_group!(read,
-    data_file,
-    display_memory,
-    list_cal_set,
-    wvi_file,
-);
+criterion_group!(read, data_file, display_memory, list_cal_set, wvi_file,);

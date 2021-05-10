@@ -1,10 +1,11 @@
 use citi::{
-    Result, Record, Device, DataArray, Var, assert_array_relative_eq, assert_complex_array_relative_eq
+    assert_array_relative_eq, assert_complex_array_relative_eq, DataArray, Device, Record, Result,
+    Var,
 };
-use std::path::PathBuf;
-use std::io::BufReader;
-use std::fs::File;
 use num_complex::Complex;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::PathBuf;
 
 #[cfg(test)]
 mod cti_read_regression_tests {
@@ -73,7 +74,7 @@ mod cti_read_regression_tests {
                     assert_eq!(file.header.devices[0].entries.len(), 2);
                     assert_eq!(file.header.devices[0].entries[0], "VERSION HP8510B.05.00");
                     assert_eq!(file.header.devices[0].entries[1], "REGISTER 1");
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -87,7 +88,7 @@ mod cti_read_regression_tests {
 
                     let expected: Vec<f64> = vec![];
                     assert_array_relative_eq!(file.header.independent_variable.data, expected);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -97,18 +98,33 @@ mod cti_read_regression_tests {
             match setup() {
                 Ok(file) => {
                     let data = vec![
-                        Complex{re: -1.31189E-3, im: -1.47980E-3},
-                        Complex{re: -3.67867E-3, im: -0.67782E-3},
-                        Complex{re: -3.43990E-3, im:  0.58746E-3},
-                        Complex{re: -2.70664E-4, im: -9.76175E-4},
-                        Complex{re:  0.65892E-4, im: -9.61571E-4},
+                        Complex {
+                            re: -1.31189E-3,
+                            im: -1.47980E-3,
+                        },
+                        Complex {
+                            re: -3.67867E-3,
+                            im: -0.67782E-3,
+                        },
+                        Complex {
+                            re: -3.43990E-3,
+                            im: 0.58746E-3,
+                        },
+                        Complex {
+                            re: -2.70664E-4,
+                            im: -9.76175E-4,
+                        },
+                        Complex {
+                            re: 0.65892E-4,
+                            im: -9.61571E-4,
+                        },
                     ];
 
                     assert_eq!(file.data.len(), 1);
                     assert_eq!(file.data[0].name, "S");
                     assert_eq!(file.data[0].format, "RI");
                     assert_complex_array_relative_eq!(file.data[0].samples, data);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -168,9 +184,15 @@ mod cti_read_regression_tests {
                     assert_eq!(file.header.devices.len(), 1);
                     assert_eq!(file.header.devices[0].name, String::from("NA"));
                     assert_eq!(file.header.devices[0].entries.len(), 2);
-                    assert_eq!(file.header.devices[0].entries[0], String::from("VERSION HP8510B.05.00"));
-                    assert_eq!(file.header.devices[0].entries[1], String::from("REGISTER 1"));
-                },
+                    assert_eq!(
+                        file.header.devices[0].entries[0],
+                        String::from("VERSION HP8510B.05.00")
+                    );
+                    assert_eq!(
+                        file.header.devices[0].entries[1],
+                        String::from("REGISTER 1")
+                    );
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -194,9 +216,9 @@ mod cti_read_regression_tests {
 
                     assert_eq!(file.header.independent_variable.name, "FREQ");
                     assert_eq!(file.header.independent_variable.format, "MAG");
-                
+
                     assert_array_relative_eq!(expected, file.header.independent_variable.data);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -206,23 +228,53 @@ mod cti_read_regression_tests {
             match setup() {
                 Ok(file) => {
                     let data = vec![
-                        Complex{re:  0.86303E-1, im: -8.98651E-1},
-                        Complex{re:  8.97491E-1, im:  3.06915E-1},
-                        Complex{re: -4.96887E-1, im:  7.87323E-1},
-                        Complex{re: -5.65338E-1, im: -7.05291E-1},
-                        Complex{re:  8.94287E-1, im: -4.25537E-1},
-                        Complex{re:  1.77551E-1, im:  8.96606E-1},
-                        Complex{re: -9.35028E-1, im: -1.10504E-1},
-                        Complex{re:  3.69079E-1, im: -9.13787E-1},
-                        Complex{re:  7.80120E-1, im:  5.37841E-1},
-                        Complex{re: -7.78350E-1, im: 5.72082E-1},
+                        Complex {
+                            re: 0.86303E-1,
+                            im: -8.98651E-1,
+                        },
+                        Complex {
+                            re: 8.97491E-1,
+                            im: 3.06915E-1,
+                        },
+                        Complex {
+                            re: -4.96887E-1,
+                            im: 7.87323E-1,
+                        },
+                        Complex {
+                            re: -5.65338E-1,
+                            im: -7.05291E-1,
+                        },
+                        Complex {
+                            re: 8.94287E-1,
+                            im: -4.25537E-1,
+                        },
+                        Complex {
+                            re: 1.77551E-1,
+                            im: 8.96606E-1,
+                        },
+                        Complex {
+                            re: -9.35028E-1,
+                            im: -1.10504E-1,
+                        },
+                        Complex {
+                            re: 3.69079E-1,
+                            im: -9.13787E-1,
+                        },
+                        Complex {
+                            re: 7.80120E-1,
+                            im: 5.37841E-1,
+                        },
+                        Complex {
+                            re: -7.78350E-1,
+                            im: 5.72082E-1,
+                        },
                     ];
 
                     assert_eq!(file.data.len(), 1);
                     assert_eq!(file.data[0].name, "S[1,1]");
                     assert_eq!(file.data[0].format, "RI");
                     assert_complex_array_relative_eq!(file.data[0].samples, data);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -268,12 +320,15 @@ mod cti_read_regression_tests {
                 "ANTPOS_RX: 28.4E-3 0E+0 -16E-3 90 270 0",
                 "ANT_TX: NAH_003",
                 "ANT_RX: NAH_003",
-            ].iter().map(|&s| String::from(s)).collect(); 
+            ]
+            .iter()
+            .map(|&s| String::from(s))
+            .collect();
 
             match setup() {
                 Ok(file) => {
                     assert_eq!(file.header.comments, expected);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -291,7 +346,7 @@ mod cti_read_regression_tests {
             match setup() {
                 Ok(file) => {
                     assert_eq!(file.header.devices.len(), 0);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -300,16 +355,13 @@ mod cti_read_regression_tests {
         fn independent_variable() {
             match setup() {
                 Ok(file) => {
-                    let expected: Vec<f64> = vec![
-                        100e6,
-                        200e6,
-                    ];
+                    let expected: Vec<f64> = vec![100e6, 200e6];
 
                     assert_eq!(file.header.independent_variable.name, "Freq");
                     assert_eq!(file.header.independent_variable.format, "MAG");
-                
+
                     assert_array_relative_eq!(expected, file.header.independent_variable.data);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -319,15 +371,21 @@ mod cti_read_regression_tests {
             match setup() {
                 Ok(file) => {
                     let data = vec![
-                        Complex{re: 8.609423041343689E-1, im: 4.5087423920631409E-1},
-                        Complex{re: -6.1961996555328369E-1, im: -7.2456854581832886E-1},
+                        Complex {
+                            re: 8.609423041343689E-1,
+                            im: 4.5087423920631409E-1,
+                        },
+                        Complex {
+                            re: -6.1961996555328369E-1,
+                            im: -7.2456854581832886E-1,
+                        },
                     ];
 
                     assert_eq!(file.data.len(), 1);
                     assert_eq!(file.data[0].name, "S11");
                     assert_eq!(file.data[0].format, "RI");
                     assert_complex_array_relative_eq!(data, file.data[0].samples);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -380,12 +438,11 @@ mod cti_read_regression_tests {
             }
         }
 
-
         #[test]
         fn devices() {
             match setup() {
                 Ok(file) => {
-                    let device = Device{
+                    let device = Device {
                         name: String::from("NA"),
                         entries: vec![
                             "VERSION HP8510B.05.00",
@@ -405,12 +462,15 @@ mod cti_read_regression_tests {
                             "DUPLICATES 0",
                             "ARB_SEG 1000000000 1000000000 1",
                             "ARB_SEG 2000000000 3000000000 3",
-                        ].iter().map(|&s| String::from(s)).collect(),
+                        ]
+                        .iter()
+                        .map(|&s| String::from(s))
+                        .collect(),
                     };
                     let devices = vec![device];
 
                     assert_eq!(file.header.devices, devices);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -419,17 +479,13 @@ mod cti_read_regression_tests {
         fn independent_variable() {
             match setup() {
                 Ok(file) => {
-                    let expected: Vec<f64> = vec![
-                        1000000000.,
-                        2000000000.,
-                        2500000000.,
-                        3000000000.,
-                    ];
+                    let expected: Vec<f64> =
+                        vec![1000000000., 2000000000., 2500000000., 3000000000.];
 
                     assert_eq!(file.header.independent_variable.name, "FREQ");
                     assert_eq!(file.header.independent_variable.format, "MAG");
                     assert_array_relative_eq!(expected, file.header.independent_variable.data);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -439,26 +495,61 @@ mod cti_read_regression_tests {
             match setup() {
                 Ok(file) => {
                     let data0 = vec![
-                        Complex{re:  1.12134E-3, im:  1.73103E-3},
-                        Complex{re:  4.23145E-3, im: -5.36775E-3},
-                        Complex{re: -0.56815E-3, im:  5.32650E-3},
-                        Complex{re: -1.85942E-3, im: -4.07981E-3},
+                        Complex {
+                            re: 1.12134E-3,
+                            im: 1.73103E-3,
+                        },
+                        Complex {
+                            re: 4.23145E-3,
+                            im: -5.36775E-3,
+                        },
+                        Complex {
+                            re: -0.56815E-3,
+                            im: 5.32650E-3,
+                        },
+                        Complex {
+                            re: -1.85942E-3,
+                            im: -4.07981E-3,
+                        },
                     ];
 
                     let data1 = vec![
-                        Complex{re:  2.03895E-2, im: -0.82674E-2},
-                        Complex{re: -4.21371E-2, im: -0.24871E-2},
-                        Complex{re:  0.21038E-2, im: -3.06778E-2},
-                        Complex{re:  1.20315E-2, im: 5.99861E-2 },
+                        Complex {
+                            re: 2.03895E-2,
+                            im: -0.82674E-2,
+                        },
+                        Complex {
+                            re: -4.21371E-2,
+                            im: -0.24871E-2,
+                        },
+                        Complex {
+                            re: 0.21038E-2,
+                            im: -3.06778E-2,
+                        },
+                        Complex {
+                            re: 1.20315E-2,
+                            im: 5.99861E-2,
+                        },
                     ];
 
                     let data2 = vec![
-                        Complex{re:  4.45404E-1, im:  4.31518E-1},
-                        Complex{re:  8.34777E-1, im: -1.33056E-1},
-                        Complex{re: -7.09137E-1, im:  5.58410E-1},
-                        Complex{re:  4.84252E-1, im: -8.07098E-1},
+                        Complex {
+                            re: 4.45404E-1,
+                            im: 4.31518E-1,
+                        },
+                        Complex {
+                            re: 8.34777E-1,
+                            im: -1.33056E-1,
+                        },
+                        Complex {
+                            re: -7.09137E-1,
+                            im: 5.58410E-1,
+                        },
+                        Complex {
+                            re: 4.84252E-1,
+                            im: -8.07098E-1,
+                        },
                     ];
-
 
                     assert_eq!(file.data.len(), 3);
                     assert_eq!(file.data[0].name, String::from("E[1]"));
@@ -472,7 +563,7 @@ mod cti_read_regression_tests {
                     assert_eq!(file.data[2].name, String::from("E[3]"));
                     assert_eq!(file.data[2].format, String::from("RI"));
                     assert_complex_array_relative_eq!(data2, file.data[2].samples);
-                },
+                }
                 e => panic!("{:?}", e),
             }
         }
@@ -549,11 +640,14 @@ mod cti_write_regression_tests {
 
     fn display_memory_record() -> Record {
         let mut record = Record::new("A.01.00", "MEMORY");
-        record.header.devices.push(Device{name: String::from("NA"), entries: vec![
-            "VERSION HP8510B.05.00",
-            "REGISTER 1",
-        ].iter().map(|&s| String::from(s)).collect()});
-        record.data.push(DataArray{
+        record.header.devices.push(Device {
+            name: String::from("NA"),
+            entries: vec!["VERSION HP8510B.05.00", "REGISTER 1"]
+                .iter()
+                .map(|&s| String::from(s))
+                .collect(),
+        });
+        record.data.push(DataArray {
             name: String::from("S"),
             format: String::from("RI"),
             samples: vec![
@@ -564,7 +658,11 @@ mod cti_write_regression_tests {
                 Complex::new(0.65892E-4, -9.61571E-4),
             ],
         });
-        record.header.independent_variable = Var{name: String::from("FREQ"), format: String::from("MAG"), data: vec![0., 1., 2., 3., 4.]};
+        record.header.independent_variable = Var {
+            name: String::from("FREQ"),
+            format: String::from("MAG"),
+            data: vec![0., 1., 2., 3., 4.],
+        };
 
         record
     }

@@ -1,7 +1,7 @@
 /// Relative assert on two arrays
-/// 
+///
 /// Checks:
-/// 
+///
 /// - Are lengths exactly equal?
 /// - Are paired values approximately equal?
 #[macro_export]
@@ -52,9 +52,9 @@ mod test_assert_array_relative_eq_macro {
 }
 
 /// Relative assert on two arrays of complex numbers
-/// 
+///
 /// Checks:
-/// 
+///
 /// - Are lengths exactly equal?
 /// - Are paired values approximately equal in real and imag?
 #[macro_export]
@@ -84,32 +84,33 @@ mod test_assert_complex_array_relative_eq {
 
     #[test]
     fn pass_on_same() {
-        let expected: Vec<Complex<f64>> = vec![Complex{re: 1., im: 2.}];
-        let result: Vec<Complex<f64>> = vec![Complex{re: 1., im: 2.}];
+        let expected: Vec<Complex<f64>> = vec![Complex { re: 1., im: 2. }];
+        let result: Vec<Complex<f64>> = vec![Complex { re: 1., im: 2. }];
         assert_complex_array_relative_eq!(expected, result);
     }
 
     #[test]
     #[should_panic]
     fn fail_on_real_different() {
-        let expected: Vec<Complex<f64>> = vec![Complex{re: 1., im: 2.}];
-        let result: Vec<Complex<f64>> = vec![Complex{re: 2., im: 2.}];
+        let expected: Vec<Complex<f64>> = vec![Complex { re: 1., im: 2. }];
+        let result: Vec<Complex<f64>> = vec![Complex { re: 2., im: 2. }];
         assert_complex_array_relative_eq!(expected, result);
     }
 
     #[test]
     #[should_panic]
     fn fail_on_imag_different() {
-        let expected: Vec<Complex<f64>> = vec![Complex{re: 1., im: 2.}];
-        let result: Vec<Complex<f64>> = vec![Complex{re: 1., im: 1.}];
+        let expected: Vec<Complex<f64>> = vec![Complex { re: 1., im: 2. }];
+        let result: Vec<Complex<f64>> = vec![Complex { re: 1., im: 1. }];
         assert_complex_array_relative_eq!(expected, result);
     }
 
     #[test]
     #[should_panic]
     fn fail_on_different_size() {
-        let expected: Vec<Complex<f64>> = vec![Complex{re: 1., im: 2.}, Complex{re: 1., im: 2.}];
-        let result: Vec<Complex<f64>> = vec![Complex{re: 1., im: 2.}];
+        let expected: Vec<Complex<f64>> =
+            vec![Complex { re: 1., im: 2. }, Complex { re: 1., im: 2. }];
+        let result: Vec<Complex<f64>> = vec![Complex { re: 1., im: 2. }];
         assert_complex_array_relative_eq!(expected, result);
     }
 }

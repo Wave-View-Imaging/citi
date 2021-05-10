@@ -1,9 +1,6 @@
 use criterion::criterion_main;
 
-pub mod write;
 pub mod read;
+pub mod write;
 
-criterion_main!(
-    write::write,
-    read::read,
-);
+criterion_main!(write::write, read::read,);

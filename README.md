@@ -14,22 +14,9 @@ cargo install --locked cargo-deny
 rustup component add clippy-preview
 ```
 
-### Run tests
-```bash
-cargo test
-```
+| Check         | Command            |
+|:--------------|:-------------------|
+| Run tests     | `cargo test`       |
+| Lint          | `cargo clippy`     |
+| License Check | `cargo deny check` |
 
-### Run linter
-```bash
-cargo clippy
-```
-
-### Run license check
-```bash
-cargo deny check
-```
-
-### Run benchmarks
-```bash
-cargo bench
-```

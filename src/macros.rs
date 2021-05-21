@@ -7,11 +7,14 @@
 #[macro_export]
 macro_rules! assert_array_relative_eq {
     ($lhs:expr, $rhs:expr) => {
+        let left = &$lhs;
+        let right = &$rhs;
+
         // Size
-        assert_eq!($lhs.len(), $rhs.len());
+        assert_eq!(left.len(), right.len());
 
         // Values
-        let it = $lhs.iter().zip($rhs.iter());
+        let it = left.iter().zip(right.iter());
         for (l, r) in it {
             approx::assert_relative_eq!(l, r);
         }
@@ -60,11 +63,14 @@ mod test_assert_array_relative_eq_macro {
 #[macro_export]
 macro_rules! assert_complex_array_relative_eq {
     ($lhs:expr, $rhs:expr) => {
+        let left = &$lhs;
+        let right = &$rhs;
+
         // Size
-        assert_eq!($lhs.len(), $rhs.len());
+        assert_eq!(left.len(), right.len());
 
         // Values
-        for (l, r) in $lhs.iter().zip($rhs.iter()) {
+        for (l, r) in left.iter().zip(right.iter()) {
             approx::assert_relative_eq!(l.re, r.re);
             approx::assert_relative_eq!(l.im, r.im);
         }

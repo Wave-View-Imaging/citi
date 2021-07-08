@@ -5,6 +5,7 @@ authors = ["developer@waveviewimaging.com"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 description = "Read and write CITI files"
+repository = "https://github.com/Wave-View-Imaging/citi"
 
 [dependencies]
 regex = "1.4.5"

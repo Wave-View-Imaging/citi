@@ -1,7 +1,7 @@
 [package]
 name = "citi"
 version = "0.1.0"
-authors = ["Wave View Imaging"]
+authors = ["developer@waveviewimaging.com"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 description = "Read and write CITI files"

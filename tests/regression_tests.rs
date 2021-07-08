@@ -4,6 +4,7 @@ use citi::{
 };
 use num_complex::Complex;
 use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
 
 #[cfg(test)]
@@ -28,8 +29,8 @@ mod cti_read_regression_tests {
         }
 
         fn setup() -> Result<Record> {
-            let mut file = File::open(filename()).unwrap();
-            Record::from_reader(&mut file)
+            let mut file = BufReader::new(File::open(filename()).unwrap());
+            Record::read_from_source(&mut file)
         }
 
         #[test]
@@ -140,8 +141,8 @@ mod cti_read_regression_tests {
         }
 
         fn setup() -> Result<Record> {
-            let mut file = File::open(filename()).unwrap();
-            Record::from_reader(&mut file)
+            let mut file = BufReader::new(File::open(filename()).unwrap());
+            Record::read_from_source(&mut file)
         }
 
         #[test]
@@ -290,8 +291,8 @@ mod cti_read_regression_tests {
         }
 
         fn setup() -> Result<Record> {
-            let mut file = File::open(filename()).unwrap();
-            Record::from_reader(&mut file)
+            let mut file = BufReader::new(File::open(filename()).unwrap());
+            Record::read_from_source(&mut file)
         }
 
         #[test]
@@ -401,8 +402,8 @@ mod cti_read_regression_tests {
         }
 
         fn setup() -> Result<Record> {
-            let mut file = File::open(filename()).unwrap();
-            Record::from_reader(&mut file)
+            let mut file = BufReader::new(File::open(filename()).unwrap());
+            Record::read_from_source(&mut file)
         }
 
         #[test]
@@ -622,7 +623,7 @@ mod cti_write_regression_tests {
         let filename = tmp.path().join("temp-display-memory.cti");
         let mut file = File::create(filename.clone()).unwrap();
         let record = display_memory_record();
-        record.to_writer(&mut file).unwrap();
+        record.write_to_sink(&mut file).unwrap();
 
         assert_files_equal!(display_memory_filename(), filename);
     }

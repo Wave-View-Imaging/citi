@@ -1,14 +1,15 @@
 use citi;
 use criterion::{black_box, criterion_group, Criterion};
 use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
 
 fn read_record(filename: &str) {
     let mut path_buf = base_directory();
     path_buf.push(filename);
-    let mut reader = File::open(path_buf).unwrap();
+    let mut buf_reader = BufReader::new(File::open(path_buf).unwrap());
 
-    citi::Record::from_reader(&mut reader).unwrap();
+    citi::Record::read_from_source(&mut buf_reader).unwrap();
 }
 
 fn base_directory() -> PathBuf {

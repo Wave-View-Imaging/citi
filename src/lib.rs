@@ -1,6 +1,3 @@
-#![feature(external_doc)]
-#![feature(extended_key_value_attributes)]
-
 //! Input/Output for CITI records
 //!
 //! <p><a href="http://literature.cdn.keysight.com/litweb/pdf/ads15/cktsim/ck2016.html#:~:text=CITIrecord%20stands%20for%20Common%20Instrumentation,it%20can%20meet%20future%20needs">The standard</a>, defines the following entities:</p>
@@ -26,7 +23,29 @@
 //!
 //! These are used to provide internal comments.
 //!
-#![doc = include_str!("IOExample.md")] // Allow examples to be tested and included in crates.io
+//! ## IO Example
+//!
+//! The object must implement the [`BufRead`] trait since CITI files are read line-by-line.
+//! As a result, two reads will lead to a fail on the second read, since the buffer is empty.
+//!
+//! Read file:
+//! ```no_run
+//! use citi::Record;
+//! use std::fs::File;
+//!
+//! let mut file = File::open("file.cti").unwrap();
+//! let record = Record::from_reader(&mut file);
+//! ```
+//!
+//! Write file:
+//! ```no_run
+//! use citi::Record;
+//! use std::fs::File;
+//!
+//! let record = Record::default();
+//! let mut file = File::create("file.cti").unwrap();
+//! record.to_writer(&mut file);
+//! ```
 //!
 //! ## Input-Output Consistency:
 //!

@@ -7,7 +7,7 @@
 //! | Record   | The entire contents of the record |
 //! | Header   | Header of the record              |
 //! | Data     | One or more data arrays           |
-//! | Keyword | Define the header contents        |
+//! | Keyword  | Define the header contents        |
 //!
 //! As this is a custom ASCII record type, the standard is not as simple as one would like.
 //! The standard is followed as closely as is reasonable. The largest changes are in the

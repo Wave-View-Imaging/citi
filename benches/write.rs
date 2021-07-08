@@ -40,7 +40,7 @@ fn create_record(n: usize) -> citi::Record {
 }
 
 fn write_record<W: std::io::Write>(record: &citi::Record, writer: &mut W) {
-    record.write_to_sink(writer).unwrap();
+    record.to_writer(writer).unwrap();
 }
 
 fn write_benchmark(c: &mut Criterion) {

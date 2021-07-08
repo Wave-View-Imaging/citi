@@ -32,10 +32,9 @@
 //! ```no_run
 //! use citi::Record;
 //! use std::fs::File;
-//! use std::io::BufReader;
 //!
-//! let mut file = BufReader::new(File::open("file.cti").unwrap());
-//! let record = Record::read_from_source(&mut file);
+//! let mut file = File::open("file.cti").unwrap();
+//! let record = Record::from_reader(&mut file);
 //! ```
 //!
 //! Write file:
@@ -45,7 +44,7 @@
 //!
 //! let record = Record::default();
 //! let mut file = File::create("file.cti").unwrap();
-//! record.write_to_sink(&mut file);
+//! record.to_writer(&mut file);
 //! ```
 //!
 //! ## Input-Output Consistency:
@@ -1953,22 +1952,19 @@ impl Record {
 
     /// Read record
     ///
-    /// The object must implement the `BufRead` trait since CITI files
-    /// are read line-by-line.
-    ///
     /// Example usage:
     /// ```no_run
     /// use citi::Record;
     /// use std::fs::File;
-    /// use std::io::BufReader;
     ///
-    /// let mut file = BufReader::new(File::open("file.cti").unwrap());
-    /// let record = Record::read_from_source(&mut file);
+    /// let mut file = File::open("file.cti").unwrap();
+    /// let record = Record::from_reader(&mut file);
     /// ```
-    pub fn read_from_source<R: std::io::BufRead>(reader: &mut R) -> Result<Record> {
+    pub fn from_reader<R: std::io::Read>(reader: &mut R) -> Result<Record> {
         let mut state = RecordReaderState::new();
 
-        for (i, line) in reader.lines().enumerate() {
+        let buf_reader = std::io::BufReader::new(reader);
+        for (i, line) in buf_reader.lines().enumerate() {
             let this_line = line.map_err(ReadError::ReadingError)?;
             // Filter out new lines
             if !this_line.trim().is_empty() {
@@ -1990,9 +1986,9 @@ impl Record {
     ///
     /// let record = Record::default();
     /// let mut file = File::create("file.cti").unwrap();
-    /// record.write_to_sink(&mut file);
+    /// record.to_writer(&mut file);
     /// ```
-    pub fn write_to_sink<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
+    pub fn to_writer<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
         let keywords = self.get_keywords()?;
 
         for keyword in keywords.iter() {
@@ -2152,7 +2148,7 @@ mod test_record {
     fn write_gives_error_on_bad_file() {
         let record = Record::default();
         let mut file = std::fs::File::create(tempdir().unwrap().path().join("temp.cti")).unwrap();
-        match record.write_to_sink(&mut file) {
+        match record.to_writer(&mut file) {
             Err(Error::WriteError(WriteError::NoName)) => (),
             e => panic!("{:?}", e),
         }
@@ -2805,7 +2801,7 @@ mod test_record {
 
         #[test]
         fn cannot_read_empty_record() {
-            match Record::read_from_source(&mut "".as_bytes()) {
+            match Record::from_reader(&mut "".as_bytes()) {
                 Err(Error::ReadError(ReadError::NoName)) => (),
                 e => panic!("{:?}", e),
             }
@@ -2814,7 +2810,7 @@ mod test_record {
         #[test]
         fn succeed_on_multiple_new_lines() {
             let contents = "CITIFILE A.01.00\nNAME MEMORY\n\n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-            match Record::read_from_source(&mut contents.as_bytes()) {
+            match Record::from_reader(&mut contents.as_bytes()) {
                 Ok(_) => (),
                 e => panic!("{:?}", e),
             }
@@ -2823,7 +2819,7 @@ mod test_record {
         #[test]
         fn succeed_on_whitespace_new_lines() {
             let contents = "CITIFILE A.01.00\nNAME MEMORY\n      \n\n\n\n\n\n\n\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-            match Record::read_from_source(&mut contents.as_bytes()) {
+            match Record::from_reader(&mut contents.as_bytes()) {
                 Ok(_) => (),
                 e => panic!("{:?}", e),
             }
@@ -2835,7 +2831,7 @@ mod test_record {
 
             fn setup() -> Result<Record> {
                 let contents = "CITIFILE A.01.00\nNAME MEMORY\nVAR FREQ MAG 3\nDATA S RI\nBEGIN\n-3.54545E-2,-1.38601E-3\n0.23491E-3,-1.39883E-3\n2.00382E-3,-1.40022E-3\nEND\n";
-                Record::read_from_source(&mut contents.as_bytes())
+                Record::from_reader(&mut contents.as_bytes())
             }
 
             #[test]

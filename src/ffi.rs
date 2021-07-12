@@ -55,3 +55,148 @@ pub extern "C" fn record_default() -> *mut Record {
     Box::into_raw(Box::new(record))
 }
 
+/// Get the record version
+/// 
+/// - If the [`Record`] pointer is null, null is returned.
+/// - If the current version cannot be cast to [`std::ffi::CString`], null is returned.
+/// - Returned record in null terminated
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_version(record: *mut Record) -> *const c_char {
+    // Check null
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Convert to C string. Going through CString adds null terminator.
+    let c_str = unsafe {
+        match CString::new(&(*record).header.version[..]) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        }
+    };
+    c_str.into_raw()
+}
+
+/// Create null pointer
+#[cfg(test)]
+fn null_setup() -> *mut Record {
+    std::ptr::null_mut()
+}
+
+/// Create pointer from `record_default`
+#[cfg(test)]
+fn default_setup() -> *mut Record {
+    record_default()
+}
+
+/// Release Record pointer
+#[cfg(test)]
+fn teardown(record_ptr: *mut Record) {
+    record_destroy(record_ptr);
+}
+
+/// Test runner to handle creation and destruction of pointer
+#[cfg(test)]
+fn test_runner<S, T>(setup_fn: S, test_fn: T) -> () where
+    S: Fn() -> *mut Record,
+    T: FnOnce(*mut Record) -> () + std::panic::UnwindSafe
+{
+    // Setup
+    let record_ptr: *mut Record = setup_fn();
+
+    // Run test
+    let result = std::panic::catch_unwind(|| {
+        test_fn(record_ptr)
+    });
+
+    // Teardown
+    teardown(record_ptr);
+
+    // Assert
+    assert!(result.is_ok())
+}
+
+#[cfg(test)]
+mod test_runners {
+    use super::*;
+
+    mod null {
+        use super::*;
+
+        #[test]
+        fn null_is_passed() {
+            test_runner(null_setup, |record_ptr| {
+                assert!(record_ptr.is_null());
+            });
+        }
+
+        #[test]
+        fn pass_passes() {
+            test_runner(null_setup, |_record_ptr| {
+                assert!(true);
+            });
+        }
+
+        #[test]
+        #[should_panic]
+        fn fail_fails() {
+            test_runner(null_setup, |_record_ptr| {
+                assert!(false);
+            });
+        }
+    }
+
+    mod default {
+        use super::*;
+
+        #[test]
+        fn not_null_is_passed() {
+            test_runner(default_setup, |record_ptr| {
+                assert!(!record_ptr.is_null());
+            });
+        }
+
+        #[test]
+        fn pass_passes() {
+            test_runner(default_setup, |_record_ptr| {
+                assert!(true);
+            });
+        }
+
+        #[test]
+        #[should_panic]
+        fn fail_fails() {
+            test_runner(default_setup, |_record_ptr| {
+                assert!(false);
+            });
+        }
+    }
+}
+
+#[cfg(test)]
+mod interface {
+    use super::*;
+    use std::ffi::CStr;
+
+    mod record_get_version {
+        use super::*;
+
+        #[test]
+        fn null() {
+            test_runner(null_setup, |record_ptr| {
+                let c_str = record_get_version(record_ptr);
+                assert!(c_str.is_null());
+            });
+        }
+
+        #[test]
+        fn default() {
+            test_runner(default_setup, unsafe { |record_ptr| {
+                let c_str = record_get_version(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("A.01.00").unwrap()[..]);
+            }});
+        }
+    }
+}

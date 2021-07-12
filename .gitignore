@@ -1,2 +1,10 @@
+# Rust
 /target
 Cargo.lock
+
+# Python
+*.egg-info
+*.so
+*.dylib
+*.dll
+__pycache__

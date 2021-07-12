@@ -22,11 +22,35 @@ rustup component add clippy-preview
 | Lint          | `cargo clippy`     |
 | License Check | `cargo deny check` |
 
+## Python
+
+### Dev Install
+```bash
+# Create conda environment
+conda create -n wvi --file dev-requirements.txt python=3.8
+
+# Local install
+pip install -e .
+```
+
+### Run tests
+```bash
+nosetests ffi/python/tests
+```
+
+### Run lint
+Note that everything is linted including source and out of source tests.
+```bash
+flake8
+```
+
 ## Creating a release
 
 ### Create Release
 - Determine new release version
-- Update `version` in `Cargo.toml`, commit
+- Update `version` and commit
+  - `package.version` in `Cargo.toml`
+  - `version` in `setup.py`
 - Create the tag and push
 ```bash
 git tag -a v1.4 -m "my version 1.4"

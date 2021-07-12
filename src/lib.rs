@@ -70,6 +70,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 mod macros;
+pub mod ffi;
 
 /// Crate error
 ///

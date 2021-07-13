@@ -37,7 +37,10 @@ def __get_library_name() -> str:
     dll_dir = os.path.dirname(Path(__file__).absolute())
 
     # Add pattern
-    pattern = f'*citi*cpython*{sys.version_info[0]}{sys.version_info[1]}*'
+    if sys.platform.startswith('win'):
+        pattern = f'*citi*{sys.version_info[0]}{sys.version_info[1]}*.pyd'
+    else:
+        pattern = f'*citi*cpython*{sys.version_info[0]}{sys.version_info[1]}*'
     dll_pattern = os.path.join(dll_dir, pattern)
 
     # Find the DLL

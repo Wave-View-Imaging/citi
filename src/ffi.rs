@@ -106,6 +106,29 @@ pub extern "C" fn record_set_version(record: *mut Record, version: *const c_char
     }
 }
 
+/// Get the record name
+/// 
+/// - If the [`Record`] pointer is null, null is returned.
+/// - If the current name cannot be cast to [`std::ffi::CString`], null is returned.
+/// - Returned name in null terminated
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_name(record: *mut Record) -> *const c_char {
+    // Check null
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Convert to C string. Going through CString adds null terminator.
+    let c_str = unsafe {
+        match CString::new(&(*record).header.name[..]) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        }
+    };
+    c_str.into_raw()
+}
+
 /// Create null pointer
 #[cfg(test)]
 fn null_setup() -> *mut Record {
@@ -259,6 +282,27 @@ mod interface {
                 let c_str = record_get_version(record_ptr);
                 assert!(!c_str.is_null());
                 assert_eq!(CStr::from_ptr(c_str), &CString::new("foo").unwrap()[..]);
+            }});
+        }
+    }
+
+    mod record_get_name {
+        use super::*;
+
+        #[test]
+        fn null() {
+            test_runner(null_setup, |record_ptr| {
+                let c_str = record_get_name(record_ptr);
+                assert!(c_str.is_null());
+            });
+        }
+
+        #[test]
+        fn default() {
+            test_runner(default_setup, unsafe { |record_ptr| {
+                let c_str = record_get_name(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("").unwrap()[..]);
             }});
         }
     }

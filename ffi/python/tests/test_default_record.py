@@ -9,3 +9,6 @@ class TestDefaultRecord(unittest.TestCase):
 
     def test_version(self):
         self.assertEqual(self.record.version, "A.01.00")
+
+    def test_name(self):
+        self.assertEqual(self.record.name, "")

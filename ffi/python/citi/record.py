@@ -83,6 +83,10 @@ CITI_LIB.record_get_version.restype = c_char_p
 CITI_LIB.record_set_version.argtypes = (POINTER(FFIRecord), c_char_p)
 CITI_LIB.record_set_version.restype = None
 
+# record_get_name
+CITI_LIB.record_get_name.argtypes = (POINTER(FFIRecord),)
+CITI_LIB.record_get_name.restype = c_char_p
+
 
 class Record():
     """Representation of a CITI file
@@ -106,3 +110,7 @@ class Record():
     @version.setter
     def version(self, value: str):
         CITI_LIB.record_set_version(self.__obj, value.encode('utf-8'))
+
+    @property
+    def name(self) -> str:
+        return CITI_LIB.record_get_name(self.__obj).decode("utf-8")

@@ -129,6 +129,34 @@ pub extern "C" fn record_get_name(record: *mut Record) -> *const c_char {
     c_str.into_raw()
 }
 
+/// Set the record name
+/// 
+/// - If the [`Record`] pointer is null, the function does nothing and returns.
+/// - If the name pointer is null, the function does nothing and returns.
+/// - Input string should be UTF-8 encoded
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_set_name(record: *mut Record, name: *const c_char) {
+    // Check null record
+    if record.is_null() {
+        return;
+    }
+
+    // Check null name
+    if name.is_null() {
+        return;
+    }
+
+    // Convert to String and set
+    unsafe {
+        let string_name = match CStr::from_ptr(name).to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => return,
+        };
+        (*record).header.name = string_name;
+    }
+}
+
 /// Create null pointer
 #[cfg(test)]
 fn null_setup() -> *mut Record {
@@ -303,6 +331,43 @@ mod interface {
                 let c_str = record_get_name(record_ptr);
                 assert!(!c_str.is_null());
                 assert_eq!(CStr::from_ptr(c_str), &CString::new("").unwrap()[..]);
+            }});
+        }
+    }
+
+
+    mod record_set_name {
+        use super::*;
+
+        #[test]
+        fn null_record() {
+            test_runner(null_setup, |record_ptr| {
+                let name = CString::new("foo").unwrap().into_raw();
+                record_set_name(record_ptr, name);
+                let c_str = record_get_name(record_ptr);
+                assert!(c_str.is_null());
+            });
+        }
+
+        #[test]
+        fn null_version() {
+            test_runner(default_setup, unsafe { |record_ptr| {
+                let name = std::ptr::null_mut();
+                record_set_name(record_ptr, name);
+                let c_str = record_get_name(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn set_version() {
+            test_runner(default_setup, unsafe { |record_ptr| {
+                let name = CString::new("foo").unwrap().into_raw();
+                record_set_name(record_ptr, name);
+                let c_str = record_get_name(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("foo").unwrap()[..]);
             }});
         }
     }

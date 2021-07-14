@@ -9,7 +9,7 @@
 //! or return a value based on the interface.
 use crate::Record;
 
-use std::ffi::CString;
+use std::ffi::{CString, CStr};
 use libc::c_char;
 
 /// Free a pointer to `Record`
@@ -76,6 +76,34 @@ pub extern "C" fn record_get_version(record: *mut Record) -> *const c_char {
         }
     };
     c_str.into_raw()
+}
+
+/// Set the record version
+/// 
+/// - If the [`Record`] pointer is null, the function does nothing and returns.
+/// - If the version pointer is null, the function does nothing and returns.
+/// - Input string should be UTF-8 encoded
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_set_version(record: *mut Record, version: *const c_char) {
+    // Check null record
+    if record.is_null() {
+        return;
+    }
+
+    // Check null version
+    if version.is_null() {
+        return;
+    }
+
+    // Convert to String and set
+    unsafe {
+        let string_version = match CStr::from_ptr(version).to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => return,
+        };
+        (*record).header.version = string_version;
+    }
 }
 
 /// Create null pointer
@@ -177,7 +205,6 @@ mod test_runners {
 #[cfg(test)]
 mod interface {
     use super::*;
-    use std::ffi::CStr;
 
     mod record_get_version {
         use super::*;
@@ -196,6 +223,42 @@ mod interface {
                 let c_str = record_get_version(record_ptr);
                 assert!(!c_str.is_null());
                 assert_eq!(CStr::from_ptr(c_str), &CString::new("A.01.00").unwrap()[..]);
+            }});
+        }
+    }
+
+    mod record_set_version {
+        use super::*;
+
+        #[test]
+        fn null_record() {
+            test_runner(null_setup, |record_ptr| {
+                let version = CString::new("foo").unwrap().into_raw();
+                record_set_version(record_ptr, version);
+                let c_str = record_get_version(record_ptr);
+                assert!(c_str.is_null());
+            });
+        }
+
+        #[test]
+        fn null_version() {
+            test_runner(default_setup, unsafe { |record_ptr| {
+                let version = std::ptr::null_mut();
+                record_set_version(record_ptr, version);
+                let c_str = record_get_version(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("A.01.00").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn set_version() {
+            test_runner(default_setup, unsafe { |record_ptr| {
+                let version = CString::new("foo").unwrap().into_raw();
+                record_set_version(record_ptr, version);
+                let c_str = record_get_version(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("foo").unwrap()[..]);
             }});
         }
     }

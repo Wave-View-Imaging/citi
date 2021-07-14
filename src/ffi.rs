@@ -59,7 +59,7 @@ pub extern "C" fn record_default() -> *mut Record {
 /// 
 /// - If the [`Record`] pointer is null, null is returned.
 /// - If the current version cannot be cast to [`std::ffi::CString`], null is returned.
-/// - Returned record in null terminated
+/// - Returned version in null terminated
 #[no_mangle]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn record_get_version(record: *mut Record) -> *const c_char {

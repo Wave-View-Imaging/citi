@@ -30,7 +30,7 @@ def __get_library_name() -> str:
 
     However, no other files can match the glob pattern:
         *citi*cpython*
-    A `ModuleNotFoundError` exception is raised is zero or more
+    A `ModuleNotFoundError` exception is raised if zero or more
     than one file matching the pattern is found.
     '''
     # Find the directory where the DLL exists

@@ -11,6 +11,7 @@ use crate::Record;
 
 use std::ffi::{CString, CStr};
 use libc::c_char;
+use std::fs::File;
 
 /// Free a pointer to `Record`
 /// 
@@ -52,6 +53,40 @@ mod destory {
 #[no_mangle]
 pub extern "C" fn record_default() -> *mut Record {
     let record = Record::default();
+    Box::into_raw(Box::new(record))
+}
+
+/// Read record from file
+/// 
+/// This allocates memory and must be destroyed by the caller
+/// (see [`record_destroy`]).
+/// - A null pointer is returned if the filename is null, a file corresponding
+/// to the filename does not exist, or the file cannot be read
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_read(filename: *const c_char) -> *mut Record {
+    // Check null filename
+    if filename.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Filename string
+    let filename_string = unsafe { match CStr::from_ptr(filename).to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => return std::ptr::null_mut(),
+    }};
+
+    // Setup file
+    let mut file = match File::open(filename_string) {
+        Ok(f) => f,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    // Read and return
+    let record = match Record::from_reader(&mut file) {
+        Ok(r) => r,
+        Err(_) => return std::ptr::null_mut(),
+    };
     Box::into_raw(Box::new(record))
 }
 
@@ -370,5 +405,198 @@ mod interface {
                 assert_eq!(CStr::from_ptr(c_str), &CString::new("foo").unwrap()[..]);
             }});
         }
+    }
+
+}
+
+#[cfg(test)]
+mod read {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn null_filename() {
+        let record_ptr: *mut Record = record_read(std::ptr::null_mut());
+
+        let result = std::panic::catch_unwind(|| {
+            assert!(record_ptr.is_null());
+        });
+        record_destroy(record_ptr);
+        assert!(result.is_ok())
+    }
+
+    #[test]
+    fn non_existant_file() {
+        let record_ptr: *mut Record = record_read(CString::new("this is a file that does not exist").unwrap().into_raw());
+
+        let result = std::panic::catch_unwind(|| {
+            assert!(record_ptr.is_null());
+        });
+        record_destroy(record_ptr);
+        assert!(result.is_ok())
+    }
+
+    #[cfg(test)]
+    fn data_directory() -> PathBuf {
+        let mut path_buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path_buf.push("tests");
+        path_buf.push("regression_files");
+        path_buf
+    }
+
+    mod display_memory_record {
+        use super::*;
+
+        fn setup() -> *mut Record {
+            // PathBuf
+            let mut path_buf = data_directory();
+            path_buf.push("display_memory.cti");
+
+            // Read
+            record_read(CString::new(path_buf.into_os_string().into_string().unwrap()).unwrap().into_raw())
+        }
+
+        #[test]
+        fn name() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let c_str = record_get_name(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("MEMORY").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn version() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let c_str = record_get_version(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("A.01.00").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn can_read_file() {
+            test_runner(setup, |record_ptr| {
+                assert!(!record_ptr.is_null());
+            });
+        }
+
+    }
+
+    mod data_record {
+        use super::*;
+
+        fn setup() -> *mut Record {
+            // PathBuf
+            let mut path_buf = data_directory();
+            path_buf.push("data_file.cti");
+
+            // Read
+            record_read(CString::new(path_buf.into_os_string().into_string().unwrap()).unwrap().into_raw())
+        }
+
+        #[test]
+        fn can_read_file() {
+            test_runner(setup, |record_ptr| {
+                assert!(!record_ptr.is_null());
+            });
+        }
+
+        #[test]
+        fn name() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let c_str = record_get_name(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("DATA").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn version() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let c_str = record_get_version(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("A.01.00").unwrap()[..]);
+            }});
+        }
+
+    }
+
+    mod list_cal_set_record {
+        use super::*;
+
+        fn setup() -> *mut Record {
+            // PathBuf
+            let mut path_buf = data_directory();
+            path_buf.push("list_cal_set.cti");
+
+            // Read
+            record_read(CString::new(path_buf.into_os_string().into_string().unwrap()).unwrap().into_raw())
+        }
+
+        #[test]
+        fn can_read_file() {
+            test_runner(setup, |record_ptr| {
+                assert!(!record_ptr.is_null());
+            });
+        }
+
+        #[test]
+        fn name() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let c_str = record_get_name(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("CAL_SET").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn version() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let c_str = record_get_version(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("A.01.00").unwrap()[..]);
+            }});
+        }
+
+    }
+
+    mod wvi_record {
+        use super::*;
+
+        fn setup() -> *mut Record {
+            // PathBuf
+            let mut path_buf = data_directory();
+            path_buf.push("wvi_file.cti");
+
+            // Read
+            record_read(CString::new(path_buf.into_os_string().into_string().unwrap()).unwrap().into_raw())
+        }
+
+        #[test]
+        fn can_read_file() {
+            test_runner(setup, |record_ptr| {
+                assert!(!record_ptr.is_null());
+            });
+        }
+
+        #[test]
+        fn name() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let c_str = record_get_name(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("Antonly001").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn version() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let c_str = record_get_version(record_ptr);
+                assert!(!c_str.is_null());
+                assert_eq!(CStr::from_ptr(c_str), &CString::new("A.01.01").unwrap()[..]);
+            }});
+        }
+
     }
 }

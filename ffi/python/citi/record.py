@@ -71,6 +71,10 @@ CITI_LIB = ctypes.CDLL(__get_library_name())
 CITI_LIB.record_default.argtypes = ()
 CITI_LIB.record_default.restype = POINTER(FFIRecord)
 
+# record_read
+CITI_LIB.record_read.argtypes = (c_char_p,)
+CITI_LIB.record_read.restype = POINTER(FFIRecord)
+
 # record_destroy
 CITI_LIB.record_destroy.argtypes = (POINTER(FFIRecord),)
 CITI_LIB.record_destroy.restype = None
@@ -102,7 +106,7 @@ class Record():
         if filename is None:
             self.__obj = CITI_LIB.record_default()
         else:
-            self.__obj = CITI_LIB.record_default()
+            self.__obj = CITI_LIB.record_read(filename.encode('utf-8'))
 
     def __del__(self):
         CITI_LIB.record_destroy(self.__obj)

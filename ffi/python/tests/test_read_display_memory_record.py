@@ -27,3 +27,6 @@ class TestReadDisplayMemoryRecord(unittest.TestCase):
 
     def test_name(self):
         self.assertEqual(self.record.name, "MEMORY")
+
+    def test_comments(self):
+        self.assertEqual(len(self.record.comments), 0)

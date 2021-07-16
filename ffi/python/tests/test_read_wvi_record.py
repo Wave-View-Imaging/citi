@@ -27,3 +27,14 @@ class TestReadWVIRecord(unittest.TestCase):
 
     def test_name(self):
         self.assertEqual(self.record.name, "Antonly001")
+
+    def test_comments(self):
+        self.assertEqual(len(self.record.comments), 6)
+        self.assertEqual(self.record.comments, [
+            'SOURCE: 10095059066467',
+            'DATE: Fri, Jan 18, 2019, 14:14:44',
+            'ANTPOS_TX: 28.4E-3 0E+0 -16E-3 90 270 0',
+            'ANTPOS_RX: 28.4E-3 0E+0 -16E-3 90 270 0',
+            'ANT_TX: NAH_003',
+            'ANT_RX: NAH_003',
+        ])

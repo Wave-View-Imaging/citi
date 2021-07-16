@@ -14,8 +14,9 @@ import ctypes
 import glob
 import os
 import sys
-from ctypes import c_char_p, Structure, POINTER
+from ctypes import c_char_p, Structure, POINTER, c_size_t
 from pathlib import Path
+from typing import List
 
 
 def __get_library_name() -> str:
@@ -95,6 +96,14 @@ CITI_LIB.record_get_name.restype = c_char_p
 CITI_LIB.record_set_name.argtypes = (POINTER(FFIRecord), c_char_p)
 CITI_LIB.record_set_name.restype = None
 
+# record_get_number_of_comments
+CITI_LIB.record_get_number_of_comments.argtypes = (POINTER(FFIRecord),)
+CITI_LIB.record_get_number_of_comments.restype = c_size_t
+
+# record_get_comment
+CITI_LIB.record_get_comment.argtypes = (POINTER(FFIRecord), c_size_t)
+CITI_LIB.record_get_comment.restype = c_char_p
+
 
 class Record():
     """Representation of a CITI file
@@ -126,3 +135,16 @@ class Record():
     @name.setter
     def name(self, value: str):
         CITI_LIB.record_set_name(self.__obj, value.encode('utf-8'))
+
+    @property
+    def comments(self) -> List[str]:
+        comments = []
+
+        for i in range(CITI_LIB.record_get_number_of_comments(self.__obj)):
+            comments.append(
+                CITI_LIB.record_get_comment(
+                    self.__obj, ctypes.c_size_t(i)
+                ).decode('utf-8')
+            )
+
+        return comments

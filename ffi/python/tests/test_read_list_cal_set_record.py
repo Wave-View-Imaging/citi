@@ -27,3 +27,6 @@ class TestReadListCalSetRecord(unittest.TestCase):
 
     def test_name(self):
         self.assertEqual(self.record.name, "CAL_SET")
+
+    def test_comments(self):
+        self.assertEqual(len(self.record.comments), 0)

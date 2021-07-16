@@ -10,7 +10,7 @@
 use crate::Record;
 
 use std::ffi::{CString, CStr};
-use libc::c_char;
+use libc::{c_char, size_t};
 use std::fs::File;
 
 /// Free a pointer to `Record`
@@ -189,6 +189,50 @@ pub extern "C" fn record_set_name(record: *mut Record, name: *const c_char) {
             Err(_) => return,
         };
         (*record).header.name = string_name;
+    }
+}
+
+/// Get the number of comments
+/// 
+/// - If the [`Record`] pointer is null, zero is returned.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_number_of_comments(record: *mut Record) -> size_t {
+    // Check null record
+    if record.is_null() {
+        return 0_usize;
+    }
+
+    // Get length
+    unsafe {
+        (*record).header.comments.len()
+    }
+}
+
+/// Get an array of comments
+/// 
+/// - If the [`Record`] pointer is null, a null pointer is returned.
+/// - If index is out of bounds, a null pointer is returned.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_comment(record: *mut Record, idx: size_t) ->*const c_char {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        // Check size
+        if idx >= (*record).header.comments.len() {
+            return std::ptr::null_mut();
+        }
+
+        // Get value
+        let c_str = match CString::new(&(*record).header.comments[idx][..]) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        c_str.into_raw()
     }
 }
 
@@ -407,6 +451,45 @@ mod interface {
         }
     }
 
+    mod record_get_number_of_comments {
+        use super::*;
+
+        #[test]
+        fn null() {
+            test_runner(null_setup, |record_ptr| {
+                let count = record_get_number_of_comments(record_ptr);
+                assert_eq!(count, 0);
+            });
+        }
+
+        #[test]
+        fn default() {
+            test_runner(default_setup, |record_ptr| {
+                let count = record_get_number_of_comments(record_ptr);
+                assert_eq!(count, 0);
+            });
+        }
+    }
+
+    mod record_get_comment {
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let comment = record_get_comment(record_ptr, 0_usize);
+                assert!(comment.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_null() {
+            test_runner(default_setup, |record_ptr| {
+                let comment = record_get_comment(record_ptr, 0_usize);
+                assert!(comment.is_null());
+            });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -481,6 +564,12 @@ mod read {
             });
         }
 
+        #[test]
+        fn record_get_number_of_comments_is_zero() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_number_of_comments(record_ptr), 0);
+            });
+        }
     }
 
     mod data_record {
@@ -520,6 +609,12 @@ mod read {
             }});
         }
 
+        #[test]
+        fn record_get_number_of_comments_is_zero() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_number_of_comments(record_ptr), 0);
+            });
+        }
     }
 
     mod list_cal_set_record {
@@ -559,6 +654,12 @@ mod read {
             }});
         }
 
+        #[test]
+        fn record_get_number_of_comments_is_zero() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_number_of_comments(record_ptr), 0_usize);
+            });
+        }
     }
 
     mod wvi_record {
@@ -598,5 +699,69 @@ mod read {
             }});
         }
 
+        #[test]
+        fn record_get_number_of_comments_is_six() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_number_of_comments(record_ptr), 6);
+            });
+        }
+
+        mod comments {
+            use super::*;
+
+            #[test]
+            fn comment_zero() {
+                test_runner(setup, unsafe { |record_ptr| {
+                    let comment = record_get_comment(record_ptr, 0_usize);
+                    assert!(!comment.is_null());
+                    assert_eq!(CStr::from_ptr(comment), &CString::new("SOURCE: 10095059066467").unwrap()[..]);
+                }});
+            }
+
+            #[test]
+            fn comment_one() {
+                test_runner(setup, unsafe { |record_ptr| {
+                    let comment = record_get_comment(record_ptr, 1_usize);
+                    assert!(!comment.is_null());
+                    assert_eq!(CStr::from_ptr(comment), &CString::new("DATE: Fri, Jan 18, 2019, 14:14:44").unwrap()[..]);
+                }});
+            }
+
+            #[test]
+            fn comment_two() {
+                test_runner(setup, unsafe { |record_ptr| {
+                    let comment = record_get_comment(record_ptr, 2_usize);
+                    assert!(!comment.is_null());
+                    assert_eq!(CStr::from_ptr(comment), &CString::new("ANTPOS_TX: 28.4E-3 0E+0 -16E-3 90 270 0").unwrap()[..]);
+                }});
+            }
+
+            #[test]
+            fn comment_three() {
+                test_runner(setup, unsafe { |record_ptr| {
+                    let comment = record_get_comment(record_ptr, 3_usize);
+                    assert!(!comment.is_null());
+                    assert_eq!(CStr::from_ptr(comment), &CString::new("ANTPOS_RX: 28.4E-3 0E+0 -16E-3 90 270 0").unwrap()[..]);
+                }});
+            }
+
+            #[test]
+            fn comment_four() {
+                test_runner(setup, unsafe { |record_ptr| {
+                    let comment = record_get_comment(record_ptr, 4_usize);
+                    assert!(!comment.is_null());
+                    assert_eq!(CStr::from_ptr(comment), &CString::new("ANT_TX: NAH_003").unwrap()[..]);
+                }});
+            }
+
+            #[test]
+            fn comment_five() {
+                test_runner(setup, unsafe { |record_ptr| {
+                    let comment = record_get_comment(record_ptr, 5_usize);
+                    assert!(!comment.is_null());
+                    assert_eq!(CStr::from_ptr(comment), &CString::new("ANT_RX: NAH_003").unwrap()[..]);
+                }});
+            }
+        }
     }
 }

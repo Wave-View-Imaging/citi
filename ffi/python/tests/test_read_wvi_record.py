@@ -38,3 +38,6 @@ class TestReadWVIRecord(unittest.TestCase):
             'ANT_TX: NAH_003',
             'ANT_RX: NAH_003',
         ])
+
+    def test_devices(self):
+        self.assertEqual(len(self.record.devices), 0)

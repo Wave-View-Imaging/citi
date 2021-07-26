@@ -30,3 +30,10 @@ class TestReadDisplayMemoryRecord(unittest.TestCase):
 
     def test_comments(self):
         self.assertEqual(len(self.record.comments), 0)
+
+    def test_devices(self):
+        self.assertEqual(len(self.record.devices), 1)
+        self.assertEqual(self.record.devices, [(
+            "NA",
+            ["VERSION HP8510B.05.00", "REGISTER 1"]
+        )])

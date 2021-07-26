@@ -236,6 +236,105 @@ pub extern "C" fn record_get_comment(record: *mut Record, idx: size_t) ->*const 
     }
 }
 
+/// Get the number of devices
+/// 
+/// - If the [`Record`] pointer is null, zero is returned.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_number_of_devices(record: *mut Record) -> size_t {
+    // Check null record
+    if record.is_null() {
+        return 0_usize;
+    }
+
+    // Get length
+    unsafe {
+        (*record).header.devices.len()
+    }
+}
+
+/// Get the device name
+/// 
+/// - If the [`Record`] pointer is null, a null pointer is returned.
+/// - If the index is out of bounds, a null pointer is returned.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_device_name(record: *mut Record, idx: size_t) -> *const c_char {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        // Check size
+        if idx >= (*record).header.devices.len() {
+            return std::ptr::null_mut();
+        }
+
+        // Get value
+        let c_str = match CString::new(&(*record).header.devices[idx].name[..]) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        c_str.into_raw()
+    }
+}
+
+/// Get the number of entries in a device
+/// 
+/// - If the [`Record`] pointer is null, zero.
+/// - If the index is out of bounds, zero.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_device_number_of_entries(record: *mut Record, idx: size_t) -> size_t {
+    // Check null record
+    if record.is_null() {
+        return 0_usize;
+    }
+
+    unsafe {
+        // Check size
+        if idx >= (*record).header.devices.len() {
+            return 0_usize;
+        }
+
+        // Get length
+        (*record).header.devices[idx].entries.len()
+    }
+}
+
+/// Get the entry from a device
+/// 
+/// - If the [`Record`] pointer is null, zero.
+/// - If the index is out of bounds, zero.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_device_entry(record: *mut Record, device_idx: size_t, entry_idx: size_t) -> *const c_char {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        // Check device index
+        if device_idx >= (*record).header.devices.len() {
+            return std::ptr::null_mut();
+        }
+
+        // Check entry index
+        if entry_idx >= (*record).header.devices[device_idx].entries.len() {
+            return std::ptr::null_mut();
+        }
+
+        // Get value
+        let c_str = match CString::new(&(*record).header.devices[device_idx].entries[entry_idx][..]) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        c_str.into_raw()
+    }
+}
+
 /// Create null pointer
 #[cfg(test)]
 fn null_setup() -> *mut Record {
@@ -490,6 +589,86 @@ mod interface {
             });
         }
     }
+
+    mod record_get_number_of_devices {
+        use super::*;
+
+        #[test]
+        fn null() {
+            test_runner(null_setup, |record_ptr| {
+                let count = record_get_number_of_devices(record_ptr);
+                assert_eq!(count, 0);
+            });
+        }
+
+        #[test]
+        fn default() {
+            test_runner(default_setup, |record_ptr| {
+                let count = record_get_number_of_devices(record_ptr);
+                assert_eq!(count, 0);
+            });
+        }
+    }
+
+    mod record_get_device_name {
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let comment = record_get_device_name(record_ptr, 0_usize);
+                assert!(comment.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_null() {
+            test_runner(default_setup, |record_ptr| {
+                let comment = record_get_device_name(record_ptr, 0_usize);
+                assert!(comment.is_null());
+            });
+        }
+    }
+
+    mod record_get_device_number_of_entries {
+        use super::*;
+
+        #[test]
+        fn null() {
+            test_runner(null_setup, |record_ptr| {
+                let count = record_get_device_number_of_entries(record_ptr, 0_usize);
+                assert_eq!(count, 0);
+            });
+        }
+
+        #[test]
+        fn default() {
+            test_runner(default_setup, |record_ptr| {
+                let count = record_get_device_number_of_entries(record_ptr, 0_usize);
+                assert_eq!(count, 0);
+            });
+        }
+    }
+
+    mod record_get_device_entry {
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let comment = record_get_device_entry(record_ptr, 0_usize, 0_usize);
+                assert!(comment.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_null() {
+            test_runner(default_setup, |record_ptr| {
+                let comment = record_get_device_entry(record_ptr, 0_usize, 0_usize);
+                assert!(comment.is_null());
+            });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -570,6 +749,47 @@ mod read {
                 assert_eq!(record_get_number_of_comments(record_ptr), 0);
             });
         }
+
+        #[test]
+        fn record_get_number_of_devices_is_one() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_number_of_devices(record_ptr), 1);
+            });
+        }
+
+        #[test]
+        fn record_get_device_name_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let comment = record_get_device_name(record_ptr, 0_usize);
+                assert!(!comment.is_null());
+                assert_eq!(CStr::from_ptr(comment), &CString::new("NA").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_device_number_of_entries_is_two() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_device_number_of_entries(record_ptr, 0_usize), 2);
+            });
+        }
+
+        #[test]
+        fn record_get_device_entry_zero() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let comment = record_get_device_entry(record_ptr, 0_usize, 0_usize);
+                assert!(!comment.is_null());
+                assert_eq!(CStr::from_ptr(comment), &CString::new("VERSION HP8510B.05.00").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_device_entry_one() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let comment = record_get_device_entry(record_ptr, 0_usize, 1_usize);
+                assert!(!comment.is_null());
+                assert_eq!(CStr::from_ptr(comment), &CString::new("REGISTER 1").unwrap()[..]);
+            }});
+        }
     }
 
     mod data_record {
@@ -615,6 +835,47 @@ mod read {
                 assert_eq!(record_get_number_of_comments(record_ptr), 0);
             });
         }
+
+        #[test]
+        fn record_get_number_of_devices_is_one() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_number_of_devices(record_ptr), 1);
+            });
+        }
+
+        #[test]
+        fn record_get_device_name_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let comment = record_get_device_name(record_ptr, 0_usize);
+                assert!(!comment.is_null());
+                assert_eq!(CStr::from_ptr(comment), &CString::new("NA").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_device_number_of_entries_is_two() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_device_number_of_entries(record_ptr, 0_usize), 2);
+            });
+        }
+
+        #[test]
+        fn record_get_device_entry_zero() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let comment = record_get_device_entry(record_ptr, 0_usize, 0_usize);
+                assert!(!comment.is_null());
+                assert_eq!(CStr::from_ptr(comment), &CString::new("VERSION HP8510B.05.00").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_device_entry_one() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let comment = record_get_device_entry(record_ptr, 0_usize, 1_usize);
+                assert!(!comment.is_null());
+                assert_eq!(CStr::from_ptr(comment), &CString::new("REGISTER 1").unwrap()[..]);
+            }});
+        }
     }
 
     mod list_cal_set_record {
@@ -659,6 +920,60 @@ mod read {
             test_runner(setup, |record_ptr| {
                 assert_eq!(record_get_number_of_comments(record_ptr), 0_usize);
             });
+        }
+
+        #[test]
+        fn record_get_number_of_devices_is_one() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_number_of_devices(record_ptr), 1);
+            });
+        }
+
+        #[test]
+        fn record_get_device_name_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let comment = record_get_device_name(record_ptr, 0_usize);
+                assert!(!comment.is_null());
+                assert_eq!(CStr::from_ptr(comment), &CString::new("NA").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_device_number_of_entries_is_seventeen() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_device_number_of_entries(record_ptr, 0_usize), 17);
+            });
+        }
+
+        #[test]
+        fn record_get_device_entries() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let expected = vec![
+                    "VERSION HP8510B.05.00",
+                    "REGISTER 1",
+                    "SWEEP_TIME 9.999987E-2",
+                    "POWER1 1.0E1",
+                    "POWER2 1.0E1",
+                    "PARAMS 2",
+                    "CAL_TYPE 3",
+                    "POWER_SLOPE 0.0E0",
+                    "SLOPE_MODE 0",
+                    "TRIM_SWEEP 0",
+                    "SWEEP_MODE 4",
+                    "LOWPASS_FLAG -1",
+                    "FREQ_INFO 1",
+                    "SPAN 1000000000 3000000000 4",
+                    "DUPLICATES 0",
+                    "ARB_SEG 1000000000 1000000000 1",
+                    "ARB_SEG 2000000000 3000000000 3",
+                ];
+
+                for (i, item) in expected.iter().enumerate() {
+                    let comment = record_get_device_entry(record_ptr, 0_usize, i as usize);
+                    assert!(!comment.is_null());
+                    assert_eq!(CStr::from_ptr(comment), &CString::new(*item).unwrap()[..]);
+                }
+            }});
         }
     }
 
@@ -762,6 +1077,13 @@ mod read {
                     assert_eq!(CStr::from_ptr(comment), &CString::new("ANT_RX: NAH_003").unwrap()[..]);
                 }});
             }
+        }
+
+        #[test]
+        fn record_get_number_of_devices_is_zero() {
+            test_runner(setup, |record_ptr| {
+                assert_eq!(record_get_number_of_devices(record_ptr), 0);
+            });
         }
     }
 }

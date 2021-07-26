@@ -30,3 +30,28 @@ class TestReadListCalSetRecord(unittest.TestCase):
 
     def test_comments(self):
         self.assertEqual(len(self.record.comments), 0)
+
+    def test_devices(self):
+        self.assertEqual(len(self.record.devices), 1)
+        self.assertEqual(self.record.devices, [(
+            "NA",
+            [
+                "VERSION HP8510B.05.00",
+                "REGISTER 1",
+                "SWEEP_TIME 9.999987E-2",
+                "POWER1 1.0E1",
+                "POWER2 1.0E1",
+                "PARAMS 2",
+                "CAL_TYPE 3",
+                "POWER_SLOPE 0.0E0",
+                "SLOPE_MODE 0",
+                "TRIM_SWEEP 0",
+                "SWEEP_MODE 4",
+                "LOWPASS_FLAG -1",
+                "FREQ_INFO 1",
+                "SPAN 1000000000 3000000000 4",
+                "DUPLICATES 0",
+                "ARB_SEG 1000000000 1000000000 1",
+                "ARB_SEG 2000000000 3000000000 3",
+            ]
+        )])

@@ -18,3 +18,8 @@ class TestDefaultRecord(unittest.TestCase):
 
     def test_devices(self):
         self.assertEqual(len(self.record.devices), 0)
+
+    def test_independent_variable(self):
+        self.assertEqual(self.record.independent_variable, (
+            "", "", []
+        ))

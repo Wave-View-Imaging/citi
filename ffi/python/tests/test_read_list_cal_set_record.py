@@ -2,6 +2,7 @@ import unittest
 import os
 from pathlib import Path
 from citi import Record
+import numpy.testing as npt
 
 
 class TestReadListCalSetRecord(unittest.TestCase):
@@ -55,3 +56,11 @@ class TestReadListCalSetRecord(unittest.TestCase):
                 "ARB_SEG 2000000000 3000000000 3",
             ]
         )])
+
+    def test_independent_variable(self):
+        self.assertEqual(self.record.independent_variable[0], "FREQ")
+        self.assertEqual(self.record.independent_variable[1], "MAG")
+        npt.assert_array_almost_equal(
+            self.record.independent_variable[2],
+            [1000000000., 2000000000., 2500000000., 3000000000.]
+        )

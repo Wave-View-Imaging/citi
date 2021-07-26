@@ -2,6 +2,7 @@ import unittest
 import os
 from pathlib import Path
 from citi import Record
+import numpy.testing as npt
 
 
 class TestReadWVIRecord(unittest.TestCase):
@@ -41,3 +42,11 @@ class TestReadWVIRecord(unittest.TestCase):
 
     def test_devices(self):
         self.assertEqual(len(self.record.devices), 0)
+
+    def test_independent_variable(self):
+        self.assertEqual(self.record.independent_variable[0], "Freq")
+        self.assertEqual(self.record.independent_variable[1], "MAG")
+        npt.assert_array_almost_equal(
+            self.record.independent_variable[2],
+            [100000000.0, 200000000.0]
+        )

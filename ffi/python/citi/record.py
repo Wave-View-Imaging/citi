@@ -16,7 +16,7 @@ import os
 import sys
 from ctypes import c_char_p, Structure, POINTER, c_size_t
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
 
 def __get_library_name() -> str:
@@ -104,6 +104,24 @@ CITI_LIB.record_get_number_of_comments.restype = c_size_t
 CITI_LIB.record_get_comment.argtypes = (POINTER(FFIRecord), c_size_t)
 CITI_LIB.record_get_comment.restype = c_char_p
 
+# record_get_number_of_devices
+CITI_LIB.record_get_number_of_devices.argtypes = (POINTER(FFIRecord),)
+CITI_LIB.record_get_number_of_devices.restype = c_size_t
+
+# record_get_device_name
+CITI_LIB.record_get_device_name.argtypes = (POINTER(FFIRecord), c_size_t)
+CITI_LIB.record_get_device_name.restype = c_char_p
+
+# record_get_device_number_of_entries
+CITI_LIB.record_get_device_number_of_entries.argtypes = \
+    (POINTER(FFIRecord), c_size_t)
+CITI_LIB.record_get_device_number_of_entries.restype = c_size_t
+
+# record_get_device_entry
+CITI_LIB.record_get_device_entry.argtypes = \
+    (POINTER(FFIRecord), c_size_t, c_size_t)
+CITI_LIB.record_get_device_entry.restype = c_char_p
+
 
 class Record():
     """Representation of a CITI file
@@ -154,3 +172,25 @@ class Record():
             )
 
         return comments
+
+    @property
+    def devices(self) -> List[Union[str, List[str]]]:
+        devices = []
+
+        for d in range(CITI_LIB.record_get_number_of_devices(self.__obj)):
+            name = CITI_LIB.record_get_device_name(
+                self.__obj, ctypes.c_size_t(d)
+            ).decode('utf-8')
+
+            entries = []
+            for e in range(CITI_LIB.record_get_device_number_of_entries(
+                    self.__obj, ctypes.c_size_t(d))):
+                entries.append(
+                    CITI_LIB.record_get_device_entry(
+                        self.__obj, ctypes.c_size_t(d), ctypes.c_size_t(e)
+                    ).decode('utf-8')
+                )
+
+            devices.append((name, entries))
+
+        return devices

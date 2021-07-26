@@ -15,3 +15,6 @@ class TestDefaultRecord(unittest.TestCase):
 
     def test_comments(self):
         self.assertEqual(len(self.record.comments), 0)
+
+    def test_devices(self):
+        self.assertEqual(len(self.record.devices), 0)

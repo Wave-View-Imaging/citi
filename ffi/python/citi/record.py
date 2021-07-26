@@ -112,12 +112,18 @@ class Record():
     """
 
     def __init__(self, filename=None):
+        # Get pointer to object
         if filename is None:
             self.__obj = CITI_LIB.record_default()
         else:
             self.__obj = CITI_LIB.record_read(filename.encode('utf-8'))
 
+        # Check if null
+        if not self.__obj:
+            raise NotImplementedError('A null pointer was returned')
+
     def __del__(self):
+        # Can free null
         CITI_LIB.record_destroy(self.__obj)
 
     @property

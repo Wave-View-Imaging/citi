@@ -10,7 +10,7 @@
 use crate::Record;
 
 use std::ffi::{CString, CStr};
-use libc::{c_char, size_t};
+use libc::{c_char, size_t, c_double};
 use std::fs::File;
 
 /// Free a pointer to `Record`
@@ -332,6 +332,81 @@ pub extern "C" fn record_get_device_entry(record: *mut Record, device_idx: size_
             Err(_) => return std::ptr::null_mut(),
         };
         c_str.into_raw()
+    }
+}
+
+/// Get independent variable name
+/// 
+/// - If the [`Record`] pointer is null, return null pointer.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_independent_variable_name(record: *mut Record) -> *const c_char {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        // Get value
+        let c_str = match CString::new(&(*record).header.independent_variable.name[..]) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        c_str.into_raw()
+    }
+}
+
+/// Get independent variable format
+/// 
+/// - If the [`Record`] pointer is null, return null pointer.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_independent_variable_format(record: *mut Record) -> *const c_char {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        // Get value
+        let c_str = match CString::new(&(*record).header.independent_variable.format[..]) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        c_str.into_raw()
+    }
+}
+
+/// Get independent variable length
+/// 
+/// - If the [`Record`] pointer is null, return null pointer.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_independent_variable_length(record: *mut Record) -> size_t {
+    // Check null record
+    if record.is_null() {
+        return 0_usize;
+    }
+
+    unsafe {
+        // Get length
+        (*record).header.independent_variable.data.len()
+    }
+}
+
+/// Get independent variable array
+/// 
+/// - If the [`Record`] pointer is null, return null pointer.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_independent_variable_array(record: *mut Record) -> *const c_double {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        (*record).header.independent_variable.data.as_mut_ptr()
     }
 }
 
@@ -669,6 +744,86 @@ mod interface {
             });
         }
     }
+
+    mod record_get_independent_variable_name {
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let name = record_get_independent_variable_name(record_ptr);
+                assert!(name.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_not_null() {
+            test_runner(default_setup, |record_ptr| {
+                let name = record_get_independent_variable_name(record_ptr);
+                assert!(!name.is_null());
+            });
+        }
+    }
+    
+    mod record_get_independent_variable_format {
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let name = record_get_independent_variable_format(record_ptr);
+                assert!(name.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_not_null() {
+            test_runner(default_setup, |record_ptr| {
+                let name = record_get_independent_variable_format(record_ptr);
+                assert!(!name.is_null());
+            });
+        }
+    }
+
+    mod record_get_independent_variable_length {
+        use super::*;
+
+        #[test]
+        fn null_returns_zero() {
+            test_runner(null_setup, |record_ptr| {
+                let length = record_get_independent_variable_length(record_ptr);
+                assert_eq!(length, 0);
+            });
+        }
+
+        #[test]
+        fn empty_returns_zero() {
+            test_runner(default_setup, |record_ptr| {
+                let length = record_get_independent_variable_length(record_ptr);
+                assert_eq!(length, 0);
+            });
+        }        
+    }
+
+    mod record_get_independent_variable_array {
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let array = record_get_independent_variable_array(record_ptr);
+                assert!(array.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_not_null() {
+            test_runner(default_setup, |record_ptr| {
+                let array = record_get_independent_variable_array(record_ptr);
+                assert!(!array.is_null());
+            });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -790,6 +945,40 @@ mod read {
                 assert_eq!(CStr::from_ptr(comment), &CString::new("REGISTER 1").unwrap()[..]);
             }});
         }
+
+        #[test]
+        fn record_get_independent_variable_name_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_independent_variable_name(record_ptr);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("FREQ").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_format_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_independent_variable_format(record_ptr);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("MAG").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_length_is_zero() {
+            test_runner(setup, |record_ptr| {
+                let length = record_get_independent_variable_length(record_ptr);
+                assert_eq!(length, 0);
+            });
+        }
+
+        #[test]
+        fn record_get_independent_variable_array_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_independent_variable_array(record_ptr);
+                assert!(!array.is_null());
+            });   
+        }
     }
 
     mod data_record {
@@ -875,6 +1064,40 @@ mod read {
                 assert!(!comment.is_null());
                 assert_eq!(CStr::from_ptr(comment), &CString::new("REGISTER 1").unwrap()[..]);
             }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_name_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_independent_variable_name(record_ptr);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("FREQ").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_format_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_independent_variable_format(record_ptr);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("MAG").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_length_is_ten() {
+            test_runner(setup, |record_ptr| {
+                let length = record_get_independent_variable_length(record_ptr);
+                assert_eq!(length, 10);
+            });
+        }
+
+        #[test]
+        fn record_get_independent_variable_array_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_independent_variable_array(record_ptr);
+                assert!(!array.is_null());
+            });   
         }
     }
 
@@ -974,6 +1197,40 @@ mod read {
                     assert_eq!(CStr::from_ptr(comment), &CString::new(*item).unwrap()[..]);
                 }
             }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_name_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_independent_variable_name(record_ptr);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("FREQ").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_format_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_independent_variable_format(record_ptr);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("MAG").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_length_is_four() {
+            test_runner(setup, |record_ptr| {
+                let length = record_get_independent_variable_length(record_ptr);
+                assert_eq!(length, 4);
+            });
+        }
+
+        #[test]
+        fn record_get_independent_variable_array_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_independent_variable_array(record_ptr);
+                assert!(!array.is_null());
+            });   
         }
     }
 
@@ -1084,6 +1341,40 @@ mod read {
             test_runner(setup, |record_ptr| {
                 assert_eq!(record_get_number_of_devices(record_ptr), 0);
             });
+        }
+
+        #[test]
+        fn record_get_independent_variable_name_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_independent_variable_name(record_ptr);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("Freq").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_format_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_independent_variable_format(record_ptr);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("MAG").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_independent_variable_length_is_two() {
+            test_runner(setup, |record_ptr| {
+                let length = record_get_independent_variable_length(record_ptr);
+                assert_eq!(length, 2);
+            });
+        }
+
+        #[test]
+        fn record_get_independent_variable_array_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_independent_variable_array(record_ptr);
+                assert!(!array.is_null());
+            });   
         }
     }
 }

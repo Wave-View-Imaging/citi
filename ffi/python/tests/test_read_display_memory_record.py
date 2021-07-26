@@ -37,3 +37,8 @@ class TestReadDisplayMemoryRecord(unittest.TestCase):
             "NA",
             ["VERSION HP8510B.05.00", "REGISTER 1"]
         )])
+
+    def test_independent_variable(self):
+        self.assertEqual(self.record.independent_variable, (
+            "FREQ", "MAG", []
+        ))

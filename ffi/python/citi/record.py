@@ -14,7 +14,7 @@ import ctypes
 import glob
 import os
 import sys
-from ctypes import c_char_p, Structure, POINTER, c_size_t
+from ctypes import c_char_p, Structure, POINTER, c_size_t, c_double
 from pathlib import Path
 from typing import List, Union
 
@@ -122,6 +122,24 @@ CITI_LIB.record_get_device_entry.argtypes = \
     (POINTER(FFIRecord), c_size_t, c_size_t)
 CITI_LIB.record_get_device_entry.restype = c_char_p
 
+# record_get_independent_variable_name
+CITI_LIB.record_get_independent_variable_name.argtypes = (POINTER(FFIRecord),)
+CITI_LIB.record_get_independent_variable_name.restype = c_char_p
+
+# record_get_independent_variable_format
+CITI_LIB.record_get_independent_variable_format.argtypes = \
+    (POINTER(FFIRecord),)
+CITI_LIB.record_get_independent_variable_format.restype = c_char_p
+
+# record_get_independent_variable_length
+CITI_LIB.record_get_independent_variable_length.argtypes = \
+    (POINTER(FFIRecord),)
+CITI_LIB.record_get_independent_variable_length.restype = c_size_t
+
+# record_get_independent_variable_array
+CITI_LIB.record_get_independent_variable_array.argtypes = (POINTER(FFIRecord),)
+CITI_LIB.record_get_independent_variable_array.restype = POINTER(c_double)
+
 
 class Record():
     """Representation of a CITI file
@@ -194,3 +212,18 @@ class Record():
             devices.append((name, entries))
 
         return devices
+
+    @property
+    def independent_variable(self) -> Union[str, str, List[float]]:
+        name = CITI_LIB.record_get_independent_variable_name(self.__obj)\
+            .decode('utf-8')
+        format = CITI_LIB.record_get_independent_variable_format(self.__obj)\
+            .decode('utf-8')
+        len = CITI_LIB.record_get_independent_variable_length(self.__obj)
+        array = CITI_LIB.record_get_independent_variable_array(self.__obj)
+
+        iv = []
+        for i in range(len):
+            iv.append(array[i])
+
+        return (name, format, iv)

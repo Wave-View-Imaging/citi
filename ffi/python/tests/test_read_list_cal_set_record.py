@@ -73,10 +73,10 @@ class TestReadListCalSetRecord(unittest.TestCase):
         npt.assert_array_almost_equal(
             self.record.data[0][2],
             [
-                (0.00173103+0.00173103j),
-                (-0.00536775-0.00536775j),
-                (0.0053265+0.0053265j),
-                (-0.00407981-0.00407981j),
+                complex(1.12134E-3, 1.73103E-3),
+                complex(4.23145E-3, -5.36775E-3),
+                complex(-0.56815E-3, 5.32650E-3),
+                complex(-1.85942E-3, -4.07981E-3)
             ]
         )
 
@@ -85,10 +85,10 @@ class TestReadListCalSetRecord(unittest.TestCase):
         npt.assert_array_almost_equal(
             self.record.data[1][2],
             [
-                (-0.0082674-0.0082674j),
-                (-0.0024871-0.0024871j),
-                (-0.0306778-0.0306778j),
-                (0.0599861+0.0599861j)
+                complex(2.03895E-2, -0.82674E-2),
+                complex(-4.21371E-2, -0.24871E-2),
+                complex(0.21038E-2, -3.06778E-2),
+                complex(1.20315E-2, 5.99861E-2)
             ]
         )
 
@@ -97,9 +97,9 @@ class TestReadListCalSetRecord(unittest.TestCase):
         npt.assert_array_almost_equal(
             self.record.data[2][2],
             [
-                (0.431518+0.431518j),
-                (-0.133056-0.133056j),
-                (0.55841+0.55841j),
-                (-0.807098-0.807098j)
+                complex(4.45404E-1, 4.31518E-1),
+                complex(8.34777E-1, -1.33056E-1),
+                complex(-7.09137E-1, 5.58410E-1),
+                complex(4.84252E-1, -8.07098E-1)
             ]
         )

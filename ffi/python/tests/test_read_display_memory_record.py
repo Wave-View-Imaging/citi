@@ -51,10 +51,10 @@ class TestReadDisplayMemoryRecord(unittest.TestCase):
         npt.assert_array_almost_equal(
             self.record.data[0][2],
             [
-                (-0.0014798-0.0014798j),
-                (-0.00067782-0.00067782j),
-                (0.00058746+0.00058746j),
-                (-0.000976175-0.000976175j),
-                (-0.000961571-0.000961571j)
+                complex(-1.31189E-3, -1.47980E-3),
+                complex(-3.67867E-3, -0.67782E-3),
+                complex(-3.43990E-3, 0.58746E-3),
+                complex(-2.70664E-4, -9.76175E-4),
+                complex(0.65892E-4, -9.61571E-4),
             ]
         )

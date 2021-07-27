@@ -156,15 +156,10 @@ CITI_LIB.record_get_data_array_format.restype = c_char_p
 CITI_LIB.record_get_data_array_length.argtypes = (POINTER(FFIRecord), c_size_t)
 CITI_LIB.record_get_data_array_length.restype = c_size_t
 
-# record_get_data_array_real_component
-CITI_LIB.record_get_data_array_real_component.argtypes = \
-    (POINTER(FFIRecord), c_size_t)
-CITI_LIB.record_get_data_array_real_component.restype = POINTER(c_double)
-
-# record_get_data_array_imag_component
-CITI_LIB.record_get_data_array_imag_component.argtypes = \
-    (POINTER(FFIRecord), c_size_t)
-CITI_LIB.record_get_data_array_imag_component.restype = POINTER(c_double)
+# record_get_data_array
+CITI_LIB.record_get_data_array.argtypes = \
+    (POINTER(FFIRecord), c_size_t, POINTER(c_double), POINTER(c_double))
+CITI_LIB.record_get_data_array.restype = None
 
 
 class Record():
@@ -274,6 +269,7 @@ class Record():
         '''
         data = []
         for i in range(CITI_LIB.record_get_number_of_data_arrays(self.__obj)):
+            # Read names
             name = CITI_LIB.record_get_data_array_name(
                 self.__obj, ctypes.c_size_t(i)
             ).decode('utf-8')
@@ -282,17 +278,18 @@ class Record():
                 self.__obj, ctypes.c_size_t(i)
             ).decode('utf-8')
 
+            # Read arrays
+            data_length = CITI_LIB.record_get_data_array_length(
+                self.__obj, ctypes.c_size_t(i)
+            )
             array = []
-            real = CITI_LIB.record_get_data_array_real_component(
-                self.__obj, ctypes.c_size_t(i)
+            real_ptr = (c_double * data_length)()
+            imag_ptr = (c_double * data_length)()
+            CITI_LIB.record_get_data_array(
+                self.__obj, ctypes.c_size_t(i), real_ptr, imag_ptr
             )
-            imag = CITI_LIB.record_get_data_array_imag_component(
-                self.__obj, ctypes.c_size_t(i)
-            )
-            for d in range(CITI_LIB.record_get_data_array_length(
-                self.__obj, ctypes.c_size_t(i)
-            )):
-                array.append(complex(real[d], imag[d]))
+            for d in range(data_length):
+                array.append(complex(real_ptr[d], imag_ptr[d]))
 
             data.append((name, format, array))
 

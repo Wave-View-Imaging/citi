@@ -58,7 +58,7 @@ class TestReadWVIRecord(unittest.TestCase):
         npt.assert_array_almost_equal(
             self.record.data[0][2],
             [
-                (0.4508742392063141+0.4508742392063141j),
-                (-0.7245685458183289-0.7245685458183289j),
+                complex(8.609423041343689E-1, 4.5087423920631409E-1),
+                complex(-6.1961996555328369E-1, -7.2456854581832886E-1),
             ]
         )

@@ -502,51 +502,38 @@ pub extern "C" fn record_get_data_array_length(record: *mut Record, idx: size_t)
     }
 }
 
-/// Get real array from data array
+/// Get data array
 /// 
-/// - If the [`Record`] pointer is null, return null pointer.
-/// - If the index is out of bounds, return null pointer.
+/// - If the [`Record`] pointer is null, nothing happens.
+/// - If the index is out of bounds, nothing happens.
+/// - Caller is responsible for allocation of the appropriate size and deallocation.
 #[no_mangle]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub extern "C" fn record_get_data_array_real_component(record: *mut Record, idx: size_t) -> *mut c_double {
+pub extern "C" fn record_get_data_array(record: *mut Record, idx: size_t, mut real: *mut c_double, mut imag: *mut c_double) {
     // Check null record
     if record.is_null() {
-        return std::ptr::null_mut();
+        return;
+    }
+
+    // Check null arrays
+    if real.is_null() {
+        return;
+    }
+    if imag.is_null() {
+        return;
     }
 
     unsafe {
         // Check index
         if idx >= (*record).data.len() {
-            return std::ptr::null_mut();
+            return;
         }
 
-        let real_ptr = (*record).data[idx].samples.clone().into_iter().map(|x| x.re).collect::<Vec<f64>>().as_mut_ptr();
-        std::mem::forget(real_ptr);
-        real_ptr
-    }
-}
-
-/// Get imaginary array from data array
-/// 
-/// - If the [`Record`] pointer is null, return null pointer.
-/// - If the index is out of bounds, return null pointer.
-#[no_mangle]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub extern "C" fn record_get_data_array_imag_component(record: *mut Record, idx: size_t) -> *mut c_double {
-    // Check null record
-    if record.is_null() {
-        return std::ptr::null_mut();
-    }
-
-    unsafe {
-        // Check index
-        if idx >= (*record).data.len() {
-            return std::ptr::null_mut();
+        // Fill array
+        for (i, item) in (*record).data[idx].samples.iter().enumerate() {
+            *real.offset(i as isize) = item.re;
+            *imag.offset(i as isize) = item.im;
         }
-
-        let imag_ptr = (*record).data[idx].samples.clone().into_iter().map(|x| x.im).collect::<Vec<f64>>().as_mut_ptr();
-        std::mem::forget(imag_ptr);
-        imag_ptr
     }
 }
 
@@ -1044,46 +1031,6 @@ mod interface {
             });
         }
     }
-
-    mod record_get_data_array_real_component {
-        use super::*;
-
-        #[test]
-        fn null_returns_null() {
-            test_runner(null_setup, |record_ptr| {
-                let name = record_get_data_array_real_component(record_ptr, 0);
-                assert!(name.is_null());
-            });
-        }
-
-        #[test]
-        fn empty_returns_null() {
-            test_runner(default_setup, |record_ptr| {
-                let name = record_get_data_array_real_component(record_ptr, 0);
-                assert!(name.is_null());
-            });
-        }
-    }
-
-    mod record_get_data_array_imag_component {
-        use super::*;
-
-        #[test]
-        fn null_returns_null() {
-            test_runner(null_setup, |record_ptr| {
-                let name = record_get_data_array_imag_component(record_ptr, 0);
-                assert!(name.is_null());
-            });
-        }
-
-        #[test]
-        fn empty_returns_null() {
-            test_runner(default_setup, |record_ptr| {
-                let name = record_get_data_array_imag_component(record_ptr, 0);
-                assert!(name.is_null());
-            });
-        }
-    }
 }
 
 #[cfg(test)]
@@ -1273,22 +1220,6 @@ mod read {
                 assert_eq!(number, 5);
             });
         }
-
-        #[test]
-        fn record_get_data_array_real_component_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_real_component(record_ptr, 0);
-                assert!(!array.is_null());
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_imag_component_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_imag_component(record_ptr, 0);
-                assert!(!array.is_null());
-            });
-        }
     }
 
     mod data_record {
@@ -1441,22 +1372,6 @@ mod read {
             test_runner(setup, |record_ptr| {
                 let number = record_get_data_array_length(record_ptr, 0);
                 assert_eq!(number, 10);
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_real_component_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_real_component(record_ptr, 0);
-                assert!(!array.is_null());
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_imag_component_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_imag_component(record_ptr, 0);
-                assert!(!array.is_null());
             });
         }
     }
@@ -1678,54 +1593,6 @@ mod read {
                 assert_eq!(CStr::from_ptr(name), &CString::new("RI").unwrap()[..]);
             }});
         }
-
-        #[test]
-        fn record_get_data_array_real_component_zero_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_real_component(record_ptr, 0);
-                assert!(!array.is_null());
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_real_component_one_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_real_component(record_ptr, 1);
-                assert!(!array.is_null());
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_real_component_two_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_real_component(record_ptr, 2);
-                assert!(!array.is_null());
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_imag_component_zero_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_imag_component(record_ptr, 0);
-                assert!(!array.is_null());
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_imag_component_one_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_imag_component(record_ptr, 1);
-                assert!(!array.is_null());
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_imag_component_two_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_imag_component(record_ptr, 2);
-                assert!(!array.is_null());
-            });
-        }
     }
 
     mod wvi_record {
@@ -1902,22 +1769,6 @@ mod read {
             test_runner(setup, |record_ptr| {
                 let number = record_get_data_array_length(record_ptr, 0);
                 assert_eq!(number, 2);
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_real_component_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_real_component(record_ptr, 0);
-                assert!(!array.is_null());
-            });
-        }
-
-        #[test]
-        fn record_get_data_array_imag_component_is_not_null() {
-            test_runner(setup, |record_ptr| {
-                let array = record_get_data_array_imag_component(record_ptr, 0);
-                assert!(!array.is_null());
             });
         }
     }

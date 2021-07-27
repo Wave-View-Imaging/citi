@@ -64,3 +64,42 @@ class TestReadListCalSetRecord(unittest.TestCase):
             self.record.independent_variable[2],
             [1000000000., 2000000000., 2500000000., 3000000000.]
         )
+
+    def test_data(self):
+        self.assertEqual(len(self.record.data), 3)
+
+        self.assertEqual(self.record.data[0][0], 'E[1]')
+        self.assertEqual(self.record.data[0][1], 'RI')
+        npt.assert_array_almost_equal(
+            self.record.data[0][2],
+            [
+                (0.00173103+0.00173103j),
+                (-0.00536775-0.00536775j),
+                (0.0053265+0.0053265j),
+                (-0.00407981-0.00407981j),
+            ]
+        )
+
+        self.assertEqual(self.record.data[1][0], 'E[2]')
+        self.assertEqual(self.record.data[1][1], 'RI')
+        npt.assert_array_almost_equal(
+            self.record.data[1][2],
+            [
+                (-0.0082674-0.0082674j),
+                (-0.0024871-0.0024871j),
+                (-0.0306778-0.0306778j),
+                (0.0599861+0.0599861j)
+            ]
+        )
+
+        self.assertEqual(self.record.data[2][0], 'E[3]')
+        self.assertEqual(self.record.data[2][1], 'RI')
+        npt.assert_array_almost_equal(
+            self.record.data[2][2],
+            [
+                (0.431518+0.431518j),
+                (-0.133056-0.133056j),
+                (0.55841+0.55841j),
+                (-0.807098-0.807098j)
+            ]
+        )

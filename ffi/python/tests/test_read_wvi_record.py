@@ -50,3 +50,15 @@ class TestReadWVIRecord(unittest.TestCase):
             self.record.independent_variable[2],
             [100000000.0, 200000000.0]
         )
+
+    def test_data(self):
+        self.assertEqual(len(self.record.data), 1)
+        self.assertEqual(self.record.data[0][0], 'S11')
+        self.assertEqual(self.record.data[0][1], 'RI')
+        npt.assert_array_almost_equal(
+            self.record.data[0][2],
+            [
+                (0.4508742392063141+0.4508742392063141j),
+                (-0.7245685458183289-0.7245685458183289j),
+            ]
+        )

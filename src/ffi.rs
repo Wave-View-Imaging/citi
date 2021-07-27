@@ -410,6 +410,142 @@ pub extern "C" fn record_get_independent_variable_array(record: *mut Record) -> 
     }
 }
 
+/// Get number of data arrays
+/// 
+/// - If the [`Record`] pointer is null, return zero.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_number_of_data_arrays(record: *mut Record) -> size_t {
+    // Check null record
+    if record.is_null() {
+        return 0_usize;
+    }
+
+    unsafe {
+        // Get length
+        (*record).data.len()
+    }
+}
+
+/// Get data array name
+/// 
+/// - If the [`Record`] pointer is null, return null pointer.
+/// - If the index is out of bounds, return null pointer.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_data_array_name(record: *mut Record, idx: size_t) -> *const c_char {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        // Check index
+        if idx >= (*record).data.len() {
+            return std::ptr::null_mut();
+        }
+
+        // Get value
+        let c_str = match CString::new(&(*record).data[idx].name[..]) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        c_str.into_raw()
+    }
+}
+
+/// Get data array format
+/// 
+/// - If the [`Record`] pointer is null, return zero.
+/// - If the index is out of bounds, return zero.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_data_array_format(record: *mut Record, idx: size_t) -> *const c_char {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        // Check index
+        if idx >= (*record).data.len() {
+            return std::ptr::null_mut();
+        }
+
+        // Get value
+        let c_str = match CString::new(&(*record).data[idx].format[..]) {
+            Ok(s) => s,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        c_str.into_raw()
+    }
+}
+
+/// Get data array length
+/// 
+/// - If the [`Record`] pointer is null, return zero.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_data_array_length(record: *mut Record, idx: size_t) -> size_t {
+    // Check null record
+    if record.is_null() {
+        return 0_usize;
+    }
+
+    unsafe {
+        // Check index
+        if idx >= (*record).data.len() {
+            return 0_usize;
+        }
+
+        (*record).data[idx].samples.len()
+    }
+}
+
+/// Get real array from data array
+/// 
+/// - If the [`Record`] pointer is null, return null pointer.
+/// - If the index is out of bounds, return null pointer.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_data_array_real_component(record: *mut Record, idx: size_t) -> *const c_double {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        // Check index
+        if idx >= (*record).data.len() {
+            return std::ptr::null_mut();
+        }
+
+        (*record).data[idx].samples.clone().into_iter().map(|x| x.re).collect::<Vec<f64>>().as_mut_ptr()
+    }
+}
+
+/// Get imaginary array from data array
+/// 
+/// - If the [`Record`] pointer is null, return null pointer.
+/// - If the index is out of bounds, return null pointer.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_get_data_array_imag_component(record: *mut Record, idx: size_t) -> *const c_double {
+    // Check null record
+    if record.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        // Check index
+        if idx >= (*record).data.len() {
+            return std::ptr::null_mut();
+        }
+
+        (*record).data[idx].samples.clone().into_iter().map(|x| x.im).collect::<Vec<f64>>().as_mut_ptr()
+    }
+}
+
 /// Create null pointer
 #[cfg(test)]
 fn null_setup() -> *mut Record {
@@ -824,6 +960,126 @@ mod interface {
             });
         }
     }
+
+    mod record_get_number_of_data_arrays {
+        use super::*;
+
+        #[test]
+        fn null_returns_zero() {
+            test_runner(null_setup, |record_ptr| {
+                let number = record_get_number_of_data_arrays(record_ptr);
+                assert_eq!(number, 0);
+            });
+        }
+
+        #[test]
+        fn empty_is_zero() {
+            test_runner(default_setup, |record_ptr| {
+                let number = record_get_number_of_data_arrays(record_ptr);
+                assert_eq!(number, 0);
+            });
+        }
+    }
+
+    mod record_get_data_array_name{
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let name = record_get_data_array_name(record_ptr, 0);
+                assert!(name.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_null() {
+            test_runner(default_setup, |record_ptr| {
+                let name = record_get_data_array_name(record_ptr, 0);
+                assert!(name.is_null());
+            });
+        }
+    }
+
+    mod record_get_data_array_format {
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let name = record_get_data_array_format(record_ptr, 0);
+                assert!(name.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_null() {
+            test_runner(default_setup, |record_ptr| {
+                let name = record_get_data_array_format(record_ptr, 0);
+                assert!(name.is_null());
+            });
+        }
+    }
+
+    mod record_get_data_array_length {
+        use super::*;
+
+        #[test]
+        fn null_returns_zero() {
+            test_runner(null_setup, |record_ptr| {
+                let number = record_get_data_array_length(record_ptr, 0);
+                assert_eq!(number, 0);
+            });
+        }
+
+        #[test]
+        fn empty_is_zero() {
+            test_runner(default_setup, |record_ptr| {
+                let number = record_get_data_array_length(record_ptr, 0);
+                assert_eq!(number, 0);
+            });
+        }
+    }
+
+    mod record_get_data_array_real_component {
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let name = record_get_data_array_real_component(record_ptr, 0);
+                assert!(name.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_null() {
+            test_runner(default_setup, |record_ptr| {
+                let name = record_get_data_array_real_component(record_ptr, 0);
+                assert!(name.is_null());
+            });
+        }
+    }
+
+    mod record_get_data_array_imag_component {
+        use super::*;
+
+        #[test]
+        fn null_returns_null() {
+            test_runner(null_setup, |record_ptr| {
+                let name = record_get_data_array_imag_component(record_ptr, 0);
+                assert!(name.is_null());
+            });
+        }
+
+        #[test]
+        fn empty_returns_null() {
+            test_runner(default_setup, |record_ptr| {
+                let name = record_get_data_array_imag_component(record_ptr, 0);
+                assert!(name.is_null());
+            });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -979,6 +1235,56 @@ mod read {
                 assert!(!array.is_null());
             });   
         }
+
+        #[test]
+        fn record_get_number_of_data_arrays_is_one() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_number_of_data_arrays(record_ptr);
+                assert_eq!(number, 1);
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_name_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_name(record_ptr, 0);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("S").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_format_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_format(record_ptr, 0);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("RI").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_length_is_five() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_data_array_length(record_ptr, 0);
+                assert_eq!(number, 5);
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_real_component_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_real_component(record_ptr, 0);
+                assert!(!array.is_null());
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_imag_component_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_imag_component(record_ptr, 0);
+                assert!(!array.is_null());
+            });
+        }
     }
 
     mod data_record {
@@ -1098,6 +1404,56 @@ mod read {
                 let array = record_get_independent_variable_array(record_ptr);
                 assert!(!array.is_null());
             });   
+        }
+    
+        #[test]
+        fn record_get_number_of_data_arrays_is_one() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_number_of_data_arrays(record_ptr);
+                assert_eq!(number, 1);
+            });    
+        }
+
+        #[test]
+        fn record_get_data_array_name_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_name(record_ptr, 0);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("S[1,1]").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_format_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_format(record_ptr, 0);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("RI").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_length_is_ten() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_data_array_length(record_ptr, 0);
+                assert_eq!(number, 10);
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_real_component_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_real_component(record_ptr, 0);
+                assert!(!array.is_null());
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_imag_component_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_imag_component(record_ptr, 0);
+                assert!(!array.is_null());
+            });
         }
     }
 
@@ -1231,6 +1587,140 @@ mod read {
                 let array = record_get_independent_variable_array(record_ptr);
                 assert!(!array.is_null());
             });   
+        }
+
+        #[test]
+        fn record_get_number_of_data_arrays_is_three() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_number_of_data_arrays(record_ptr);
+                assert_eq!(number, 3);
+            });    
+        }
+
+        #[test]
+        fn record_get_data_array_name_zero_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_name(record_ptr, 0);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("E[1]").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_length_zero_is_four() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_data_array_length(record_ptr, 0);
+                assert_eq!(number, 4);
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_length_one_is_four() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_data_array_length(record_ptr, 1);
+                assert_eq!(number, 4);
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_length_two_is_four() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_data_array_length(record_ptr, 2);
+                assert_eq!(number, 4);
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_name_one_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_name(record_ptr, 1);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("E[2]").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_name_two_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_name(record_ptr, 2);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("E[3]").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_format_zero_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_format(record_ptr, 0);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("RI").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_format_one_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_format(record_ptr, 1);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("RI").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_format_two_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_format(record_ptr, 2);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("RI").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_real_component_zero_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_real_component(record_ptr, 0);
+                assert!(!array.is_null());
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_real_component_one_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_real_component(record_ptr, 1);
+                assert!(!array.is_null());
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_real_component_two_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_real_component(record_ptr, 2);
+                assert!(!array.is_null());
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_imag_component_zero_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_imag_component(record_ptr, 0);
+                assert!(!array.is_null());
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_imag_component_one_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_imag_component(record_ptr, 1);
+                assert!(!array.is_null());
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_imag_component_two_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_imag_component(record_ptr, 2);
+                assert!(!array.is_null());
+            });
         }
     }
 
@@ -1375,6 +1865,56 @@ mod read {
                 let array = record_get_independent_variable_array(record_ptr);
                 assert!(!array.is_null());
             });   
+        }
+
+        #[test]
+        fn record_get_number_of_data_arrays_is_one() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_number_of_data_arrays(record_ptr);
+                assert_eq!(number, 1);
+            });    
+        }
+
+        #[test]
+        fn record_get_data_array_name_zero_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_name(record_ptr, 0);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("S11").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_format_zero_is_correct() {
+            test_runner(setup, unsafe { |record_ptr| {
+                let name = record_get_data_array_format(record_ptr, 0);
+                assert!(!name.is_null());
+                assert_eq!(CStr::from_ptr(name), &CString::new("RI").unwrap()[..]);
+            }});
+        }
+
+        #[test]
+        fn record_get_data_array_length_is_two() {
+            test_runner(setup, |record_ptr| {
+                let number = record_get_data_array_length(record_ptr, 0);
+                assert_eq!(number, 2);
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_real_component_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_real_component(record_ptr, 0);
+                assert!(!array.is_null());
+            });
+        }
+
+        #[test]
+        fn record_get_data_array_imag_component_is_not_null() {
+            test_runner(setup, |record_ptr| {
+                let array = record_get_data_array_imag_component(record_ptr, 0);
+                assert!(!array.is_null());
+            });
         }
     }
 }

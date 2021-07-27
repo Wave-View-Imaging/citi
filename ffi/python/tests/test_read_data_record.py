@@ -47,3 +47,23 @@ class TestReadDataRecord(unittest.TestCase):
             self.record.independent_variable[2],
             np.linspace(1000000000., 4000000000., 10)
         )
+
+    def test_data(self):
+        self.assertEqual(len(self.record.data), 1)
+        self.assertEqual(self.record.data[0][0], 'S[1,1]')
+        self.assertEqual(self.record.data[0][1], 'RI')
+        npt.assert_array_almost_equal(
+            self.record.data[0][2],
+            [
+                (-0.898651-0.898651j),
+                (0.306915+0.306915j),
+                (0.787323+0.787323j),
+                (-0.705291-0.705291j),
+                (-0.425537-0.425537j),
+                (0.896606+0.896606j),
+                (-0.110504-0.110504j),
+                (-0.913787-0.913787j),
+                (0.537841+0.537841j),
+                (0.572082+0.572082j)
+            ]
+        )

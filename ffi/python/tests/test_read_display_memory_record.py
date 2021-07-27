@@ -2,6 +2,7 @@ import unittest
 import os
 from pathlib import Path
 from citi import Record
+import numpy.testing as npt
 
 
 class TestReadDisplayMemoryRecord(unittest.TestCase):
@@ -42,3 +43,18 @@ class TestReadDisplayMemoryRecord(unittest.TestCase):
         self.assertEqual(self.record.independent_variable, (
             "FREQ", "MAG", []
         ))
+
+    def test_data(self):
+        self.assertEqual(len(self.record.data), 1)
+        self.assertEqual(self.record.data[0][0], 'S')
+        self.assertEqual(self.record.data[0][1], 'RI')
+        npt.assert_array_almost_equal(
+            self.record.data[0][2],
+            [
+                (-0.0014798-0.0014798j),
+                (-0.00067782-0.00067782j),
+                (0.00058746+0.00058746j),
+                (-0.000976175-0.000976175j),
+                (-0.000961571-0.000961571j)
+            ]
+        )

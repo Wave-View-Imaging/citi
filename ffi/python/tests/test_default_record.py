@@ -23,3 +23,6 @@ class TestDefaultRecord(unittest.TestCase):
         self.assertEqual(self.record.independent_variable, (
             "", "", []
         ))
+
+    def test_data(self):
+        self.assertEqual(self.record.data, [])

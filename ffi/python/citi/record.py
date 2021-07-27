@@ -140,6 +140,32 @@ CITI_LIB.record_get_independent_variable_length.restype = c_size_t
 CITI_LIB.record_get_independent_variable_array.argtypes = (POINTER(FFIRecord),)
 CITI_LIB.record_get_independent_variable_array.restype = POINTER(c_double)
 
+# record_get_number_of_data_arrays
+CITI_LIB.record_get_number_of_data_arrays.argtypes = (POINTER(FFIRecord),)
+CITI_LIB.record_get_number_of_data_arrays.restype = c_size_t
+
+# record_get_data_array_name
+CITI_LIB.record_get_data_array_name.argtypes = (POINTER(FFIRecord), c_size_t)
+CITI_LIB.record_get_data_array_name.restype = c_char_p
+
+# record_get_data_array_format
+CITI_LIB.record_get_data_array_format.argtypes = (POINTER(FFIRecord), c_size_t)
+CITI_LIB.record_get_data_array_format.restype = c_char_p
+
+# record_get_data_array_length
+CITI_LIB.record_get_data_array_length.argtypes = (POINTER(FFIRecord), c_size_t)
+CITI_LIB.record_get_data_array_length.restype = c_size_t
+
+# record_get_data_array_real_component
+CITI_LIB.record_get_data_array_real_component.argtypes = \
+    (POINTER(FFIRecord), c_size_t)
+CITI_LIB.record_get_data_array_real_component.restype = POINTER(c_double)
+
+# record_get_data_array_imag_component
+CITI_LIB.record_get_data_array_imag_component.argtypes = \
+    (POINTER(FFIRecord), c_size_t)
+CITI_LIB.record_get_data_array_imag_component.restype = POINTER(c_double)
+
 
 class Record():
     """Representation of a CITI file
@@ -238,3 +264,36 @@ class Record():
             iv.append(array[i])
 
         return (name, format, iv)
+
+    @property
+    def data(self) -> List[Union[str, str, List[complex]]]:
+        '''Get the data arrays
+
+        A list of tuples is returned that are formatted:
+            [(Name: str, Format: str, independent_variable: List[Complex])]
+        '''
+        data = []
+        for i in range(CITI_LIB.record_get_number_of_data_arrays(self.__obj)):
+            name = CITI_LIB.record_get_data_array_name(
+                self.__obj, ctypes.c_size_t(i)
+            ).decode('utf-8')
+
+            format = CITI_LIB.record_get_data_array_format(
+                self.__obj, ctypes.c_size_t(i)
+            ).decode('utf-8')
+
+            array = []
+            real = CITI_LIB.record_get_data_array_real_component(
+                self.__obj, ctypes.c_size_t(i)
+            )
+            imag = CITI_LIB.record_get_data_array_imag_component(
+                self.__obj, ctypes.c_size_t(i)
+            )
+            for d in range(CITI_LIB.record_get_data_array_length(
+                self.__obj, ctypes.c_size_t(i)
+            )):
+                array.append(complex(real[d], imag[d]))
+
+            data.append((name, format, array))
+
+        return data

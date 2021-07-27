@@ -164,22 +164,27 @@ class Record():
 
     @property
     def version(self) -> str:
+        '''Get the version string'''
         return CITI_LIB.record_get_version(self.__obj).decode("utf-8")
 
     @version.setter
     def version(self, value: str):
+        '''Set the version string'''
         CITI_LIB.record_set_version(self.__obj, value.encode('utf-8'))
 
     @property
     def name(self) -> str:
+        '''Get the record name'''
         return CITI_LIB.record_get_name(self.__obj).decode("utf-8")
 
     @name.setter
     def name(self, value: str):
+        '''Set the record name'''
         CITI_LIB.record_set_name(self.__obj, value.encode('utf-8'))
 
     @property
     def comments(self) -> List[str]:
+        '''Get the comments'''
         comments = []
 
         for i in range(CITI_LIB.record_get_number_of_comments(self.__obj)):
@@ -193,6 +198,7 @@ class Record():
 
     @property
     def devices(self) -> List[Union[str, List[str]]]:
+        '''Get the devices'''
         devices = []
 
         for d in range(CITI_LIB.record_get_number_of_devices(self.__obj)):
@@ -215,6 +221,11 @@ class Record():
 
     @property
     def independent_variable(self) -> Union[str, str, List[float]]:
+        '''Get the independent variable
+
+        A tuple is returned that is formatted:
+            (Name: str, Format: str, independent_variable: List[float])
+        '''
         name = CITI_LIB.record_get_independent_variable_name(self.__obj)\
             .decode('utf-8')
         format = CITI_LIB.record_get_independent_variable_format(self.__obj)\

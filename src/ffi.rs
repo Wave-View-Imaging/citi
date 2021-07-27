@@ -508,7 +508,7 @@ pub extern "C" fn record_get_data_array_length(record: *mut Record, idx: size_t)
 /// - If the index is out of bounds, return null pointer.
 #[no_mangle]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub extern "C" fn record_get_data_array_real_component(record: *mut Record, idx: size_t) -> *const c_double {
+pub extern "C" fn record_get_data_array_real_component(record: *mut Record, idx: size_t) -> *mut c_double {
     // Check null record
     if record.is_null() {
         return std::ptr::null_mut();
@@ -520,7 +520,9 @@ pub extern "C" fn record_get_data_array_real_component(record: *mut Record, idx:
             return std::ptr::null_mut();
         }
 
-        (*record).data[idx].samples.clone().into_iter().map(|x| x.re).collect::<Vec<f64>>().as_mut_ptr()
+        let real_ptr = (*record).data[idx].samples.clone().into_iter().map(|x| x.re).collect::<Vec<f64>>().as_mut_ptr();
+        std::mem::forget(real_ptr);
+        real_ptr
     }
 }
 
@@ -530,7 +532,7 @@ pub extern "C" fn record_get_data_array_real_component(record: *mut Record, idx:
 /// - If the index is out of bounds, return null pointer.
 #[no_mangle]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub extern "C" fn record_get_data_array_imag_component(record: *mut Record, idx: size_t) -> *const c_double {
+pub extern "C" fn record_get_data_array_imag_component(record: *mut Record, idx: size_t) -> *mut c_double {
     // Check null record
     if record.is_null() {
         return std::ptr::null_mut();
@@ -542,7 +544,9 @@ pub extern "C" fn record_get_data_array_imag_component(record: *mut Record, idx:
             return std::ptr::null_mut();
         }
 
-        (*record).data[idx].samples.clone().into_iter().map(|x| x.im).collect::<Vec<f64>>().as_mut_ptr()
+        let imag_ptr = (*record).data[idx].samples.clone().into_iter().map(|x| x.im).collect::<Vec<f64>>().as_mut_ptr();
+        std::mem::forget(imag_ptr);
+        imag_ptr
     }
 }
 

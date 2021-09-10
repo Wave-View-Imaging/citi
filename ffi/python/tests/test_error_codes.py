@@ -51,7 +51,7 @@ class TestErrorCodes(unittest.TestCase):
 
     def test_file_addr_in_use(self):
         self.runner(-10, 'File address is already in use')
-        
+
     def test_file_addr_not_available(self):
         self.runner(-11, 'File address is not available')
 
@@ -92,13 +92,22 @@ class TestErrorCodes(unittest.TestCase):
         self.runner(-23, 'Unable to parse number into record')
 
     def test_record_read_error_data_array_over_index(self):
-        self.runner(-24, 'Record read error due to more data arrays than defined in header')
+        self.runner(
+            -24,
+            'Record read error due to more data arrays than defined in header'
+        )
 
     def test_record_read_error_independent_variable_defined_twice(self):
-        self.runner(-25, 'Record read error dude to independent variable defined twice')
+        self.runner(
+            -25,
+            'Record read error dude to independent variable defined twice'
+        )
 
     def test_record_read_error_single_use_keyword_defined_twice(self):
-        self.runner(-26, 'Record read error due to single use keyword defined twice')
+        self.runner(
+            -26,
+            'Record read error due to single use keyword defined twice'
+        )
 
     def test_record_read_error_out_of_order_keyword(self):
         self.runner(-27, 'Record read error due to out of order keyword')
@@ -116,13 +125,23 @@ class TestErrorCodes(unittest.TestCase):
         self.runner(-31, 'Record read error due to undefined name')
 
     def test_record_read_error_no_independent_variable(self):
-        self.runner(-32, 'Record read error due to undefined indepent variable')
+        self.runner(
+            -32,
+            'Record read error due to undefined indepent variable'
+        )
 
     def test_record_read_error_no_data(self):
-        self.runner(-33, 'Record read error due to undefined data name and format')
+        self.runner(
+            -33,
+            'Record read error due to undefined data name and format'
+        )
 
     def test_record_read_error_var_and_data_different_lengths(self):
-        self.runner(-34, 'Record read error due to different lengths for independent variable and data array')
+        self.runner(
+            -34,
+            'Record read error due to different lengths for '
+            'independent variable and data array'
+        )
 
     def test_record_write_error_no_version(self):
         self.runner(-35, 'Record write error due to undefined version')
@@ -131,10 +150,16 @@ class TestErrorCodes(unittest.TestCase):
         self.runner(-36, 'Record write error due to undefined name')
 
     def test_record_write_error_no_data_name(self):
-        self.runner(-37, 'Record write error due to no name in one of data arrays')
+        self.runner(
+            -37,
+            'Record write error due to no name in one of data arrays'
+        )
 
     def test_record_write_error_no_data_format(self):
-        self.runner(-38, 'Record write error due to no format in one of data arrays')
+        self.runner(
+            -38,
+            'Record write error due to no format in one of data arrays'
+        )
 
     def test_record_write_error_writting_error(self):
         self.runner(-39, 'Record write error due to file IO')

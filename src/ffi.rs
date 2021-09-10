@@ -31,69 +31,71 @@ enum ErrorCode {
     NoError = 0,
     UnknownError = -1,
 
-    NullArgument = -3,
+    NullArgument = -2,
 
     //CStr::from_ptr
-    InvalidUTF8String = -4,
+    InvalidUTF8String = -3,
 
     // File::open, File::create
-    FileNotFound = -5,
-    FilePermissionDenied = -6,
-    FileConnectionRefused = -7,
-    FileConnectionReset = -8,
-    FileConnectionAborted = -9,
-    FileNotConnected = -10,
-    FileAddrInUse = -11,
-    FileAddrNotAvailable = -12,
-    FileBrokenPipe = -13,
-    FileAlreadyExists = -14,
-    FileWouldBlock = -15,
-    FileInvalidInput = -16,
-    FileInvalidData = -17,
-    FileTimedOut = -18,
-    FileWriteZero = -19,
-    FileInterrupted = -20,
-    FileUnexpectedEof = -21,
+    FileNotFound = -4,
+    FilePermissionDenied = -5,
+    FileConnectionRefused = -6,
+    FileConnectionReset = -7,
+    FileConnectionAborted = -8,
+    FileNotConnected = -9,
+    FileAddrInUse = -10,
+    FileAddrNotAvailable = -11,
+    FileBrokenPipe = -12,
+    FileAlreadyExists = -13,
+    FileWouldBlock = -14,
+    FileInvalidInput = -15,
+    FileInvalidData = -16,
+    FileTimedOut = -17,
+    FileWriteZero = -18,
+    FileInterrupted = -19,
+    FileUnexpectedEof = -20,
 
     // Record::from_reader
     // Record parse errors
-    RecordParseErrorBadKeyword = -22,
-    RecordParseErrorBadRegex = -23,
-    RecordParseErrorNumber = -24,
+    RecordParseErrorBadKeyword = -21,
+    RecordParseErrorBadRegex = -22,
+    RecordParseErrorNumber = -23,
 
     // Record read errors
-    RecordReadErrorDataArrayOverIndex = -25,
-    RecordReadErrorIndependentVariableDefinedTwice = -26,
-    RecordReadErrorSingleUseKeywordDefinedTwice = -27,
-    RecordReadErrorOutOfOrderKeyword = -28,
-    RecordReadErrorLineError = -29,
-    RecordReadErrorIO = -30,
-    RecordReadErrorNoVersion = -31,
-    RecordReadErrorNoName = -32,
-    RecordReadErrorNoIndependentVariable = -33,
-    RecordReadErrorNoData = -34,
-    RecordReadErrorVarAndDataDifferentLengths = -35,
+    RecordReadErrorDataArrayOverIndex = -24,
+    RecordReadErrorIndependentVariableDefinedTwice = -25,
+    RecordReadErrorSingleUseKeywordDefinedTwice = -26,
+    RecordReadErrorOutOfOrderKeyword = -27,
+    RecordReadErrorLineError = -28,
+    RecordReadErrorIO = -29,
+    RecordReadErrorNoVersion = -30,
+    RecordReadErrorNoName = -31,
+    RecordReadErrorNoIndependentVariable = -32,
+    RecordReadErrorNoData = -33,
+    RecordReadErrorVarAndDataDifferentLengths = -34,
 
     // Record write errors
-    RecordWriteErrorNoVersion = -36,
-    RecordWriteErrorNoName = -37,
-    RecordWriteErrorNoDataName = -38,
-    RecordWriteErrorNoDataFormat = -39,
-    RecordWriteErrorWrittingError = -40,
+    RecordWriteErrorNoVersion = -35,
+    RecordWriteErrorNoName = -36,
+    RecordWriteErrorNoDataName = -37,
+    RecordWriteErrorNoDataFormat = -38,
+    RecordWriteErrorWrittingError = -39,
 
     // CString::new
-    NullByte = -41,
+    NullByte = -40,
 
-    IndexOutOfBounds = -42
+    IndexOutOfBounds = -41,
 }
 
 /// Note that this static array must be kept in sync with the error code enum.
 const ERROR_DESCRIPTION: &[&str] = &[
     "No error",
+    "Unknown error",
 
+    // Null argument
     "Function argument is null",
 
-    //CStr::from_ptr
+    // CStr::from_ptr
     "Invalid UTF8 character found in string",
     
     // File::open
@@ -114,8 +116,6 @@ const ERROR_DESCRIPTION: &[&str] = &[
     "File opertion could not be completed",
     "File operation interrupted",
     "`EOF` character was reached prematurely",
-    "File operation is unsupported",
-    "File operation failed due to insufficient memory",
 
     // Record::from_reader
     // ParseError descriptions

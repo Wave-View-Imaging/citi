@@ -16,7 +16,7 @@ import os
 import sys
 from ctypes import c_char_p, Structure, POINTER, c_size_t, c_double
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Optional
 
 
 def __get_library_name() -> str:
@@ -168,7 +168,7 @@ class Record():
     This is a C ABI FFI into an implementation written in Rust.
     """
 
-    def __init__(self, filename=None):
+    def __init__(self, filename: Optional[str] = None):
         # Get pointer to object
         if filename is None:
             self.__obj = CITI_LIB.record_default()

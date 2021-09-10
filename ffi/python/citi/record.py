@@ -14,7 +14,7 @@ import ctypes
 import glob
 import os
 import sys
-from ctypes import c_char_p, Structure, POINTER, c_size_t, c_double
+from ctypes import c_char_p, Structure, POINTER, c_size_t, c_double, c_int
 from pathlib import Path
 from typing import List, Union, Optional
 
@@ -67,6 +67,14 @@ class FFIRecord(Structure):
 # and result types for ease of use. These types match the
 # defined functions in Rust.
 CITI_LIB = ctypes.CDLL(__get_library_name())
+
+# get_last_error_code
+CITI_LIB.get_last_error_code.argtypes = ()
+CITI_LIB.get_last_error_code.restype = c_int
+
+# get_error_description
+CITI_LIB.get_error_description.argtypes = (c_int,)
+CITI_LIB.get_error_description.restype = c_char_p
 
 # record_default
 CITI_LIB.record_default.argtypes = ()
@@ -175,13 +183,24 @@ class Record():
         else:
             self.__obj = CITI_LIB.record_read(filename.encode('utf-8'))
 
-        # Check if null
         if not self.__obj:
-            raise NotImplementedError('A null pointer was returned')
+            error_code = self.last_error_code()
+            if error_code != 0:
+                raise NotImplementedError(
+                    self.get_error_description(error_code)
+                )
+            else:
+                raise NotImplementedError('A null pointer was returned')
 
     def __del__(self):
         # Can free null
         CITI_LIB.record_destroy(self.__obj)
+
+    def last_error_code(self) -> int:
+        return int(CITI_LIB.get_last_error_code())
+
+    def get_error_description(self, error_code: int) -> str:
+        return CITI_LIB.get_error_description(error_code).decode("utf-8")
 
     @property
     def version(self) -> str:

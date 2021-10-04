@@ -5,7 +5,7 @@ import os
 
 setup(
     name="citi",
-    version="0.2.0",
+    version="0.3.0",
     rust_extensions=[
         RustExtension(
             "citi.citi",

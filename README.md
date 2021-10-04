@@ -84,6 +84,7 @@ shows how the executable `test_exec` can be invoked on a unix system.
 - Update `version` and commit
   - `package.version` in `Cargo.toml`
   - `version` in `setup.py`
+  - `VERSION` in `CMakeLists.txt`
 - Create the tag and push
 ```bash
 git tag -a v1.4 -m "my version 1.4"

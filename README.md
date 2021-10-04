@@ -27,7 +27,10 @@ rustup component add clippy-preview
 ### Dev Install
 ```bash
 # Create conda environment
-conda create -n wvi --file dev-requirements.txt python=3.8
+conda create -n citi --file dev-requirements.txt python=3.8
+
+# Source
+conda activate citi
 
 # Local install
 pip install -e .

@@ -51,6 +51,12 @@ Record* record_read(const char* filename);
 /// of the given Record.
 int record_write(Record* record, const char* filename);
 
+/// Write record to buffer
+///
+/// This function will write to a buffer from the contents
+/// of the given Record.
+const char* record_serialize_to_string(Record* record);
+
 /// Get the record version
 /// 
 /// - If the [`Record`] pointer is null, null is returned.

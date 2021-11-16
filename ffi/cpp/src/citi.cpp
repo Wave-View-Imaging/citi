@@ -248,4 +248,9 @@ namespace citi {
         const auto error_code_int = record_write(rust_record, filename.string().c_str());  
         check_int_error_code(error_code_int);
     }
+
+    std::string Record::serialize() {
+        const auto c_str = record_serialize_to_string(rust_record);
+        return std::string { c_str };
+    }
 }

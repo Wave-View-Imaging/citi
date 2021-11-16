@@ -490,6 +490,40 @@ pub extern "C" fn record_write(record: *mut Record, filename: *const c_char) -> 
     ErrorCode::NoError as c_int
 }
 
+/// Write record to buffer
+///
+/// This function will write to a buffer from the contents
+/// of the given Record.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn record_serialize_to_string(record: *mut Record) -> *const c_char {
+    if record.is_null() {
+        update_error_code(ErrorCode::NullArgument);
+        return std::ptr::null_mut()
+    }
+
+    let record_ref = unsafe { &*record };
+
+    let mut buf = Vec::new();
+
+    if let Err(_) = record_ref.to_writer(&mut buf) {
+        update_error_code(ErrorCode::RecordWriteErrorNoName);
+        return std::ptr::null_mut();
+    }
+
+    // Convert to C string. Going through CString adds null terminator.
+    let c_str = match CString::new(buf) {
+        Ok(s) => s,
+        Err(_) => {
+            // The only expected error is due to an interior null byte
+            update_error_code(ErrorCode::NullByte);
+            return std::ptr::null_mut()
+        }
+    };
+
+    c_str.into_raw()
+}
+
 /// Get the record version
 /// 
 /// - If the [`Record`] pointer is null, null is returned.

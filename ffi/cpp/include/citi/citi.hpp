@@ -133,6 +133,7 @@ namespace citi {
         std::vector<DataArray> data();
         void append_data_array(const DataArray& data_arr);
         void write_to_file(const fs::path& filename);
+        std::string serialize();
 
         private:
         RustRecord* rust_record;
